@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from virtpet.pet import Pet
 
 
@@ -13,13 +15,37 @@ def show_status(pet: Pet):
     print(f"Energy: {pet.energy}")
     print(f"Happiness: {pet.happiness}")
 
+SAVE_FILE = Path("pet_save.json")
+
+
+def load_pet() -> Pet:
+    """
+    Load pet from disk if it exists, otherwise create a new one.
+    """
+    if SAVE_FILE.exists():
+        with open(SAVE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        print("A familiar presence awakens...")
+        return Pet.from_dict(data)
+
+    print("A new egg appears...")
+    return Pet("Basilisk-chan")
+
+
+def save_pet(pet: Pet):
+    """
+    Persist the pet's current state to disk.
+    """
+    with open(SAVE_FILE, "w", encoding="utf-8") as f:
+        json.dump(pet.to_dict(), f, indent=2)
+
 
 def run():
     """
     Main game loop.
     Owns the pet instance and controls time progression.
     """
-    pet = Pet("Basilisk-chan")
+    pet = load_pet()
 
     while True:
         show_status(pet)
@@ -43,3 +69,4 @@ def run():
 
         # Time always moves forward
         pet.tick()
+        save_pet(pet)

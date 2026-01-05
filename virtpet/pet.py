@@ -49,3 +49,28 @@ class Pet:
         Player action: restores energy.
         """
         self.energy = min(100, self.energy + 25)
+
+    def to_dict(self) -> dict:
+        """
+        Serialize the pet into a plain dictionary.
+        Safe to save as JSON.
+        """
+        return {
+            "name": self.name,
+            "age": self.age,
+            "hunger": self.hunger,
+            "energy": self.energy,
+            "happiness": self.happiness,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Pet":
+        """
+        Reconstruct a Pet instance from saved data.
+        """
+        pet = cls(data["name"])
+        pet.age = data["age"]
+        pet.hunger = data["hunger"]
+        pet.energy = data["energy"]
+        pet.happiness = data["happiness"]
+        return pet
