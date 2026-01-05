@@ -106,7 +106,3 @@ It is a **care artifact** — a small, persistent responsibility that fits moder
 ## 📜 License
 
 MIT — do what you want.
-
----
-
-Built with curiosity, restraint, and a slightly judgmental virtual grandma.
