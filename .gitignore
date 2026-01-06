@@ -11,3 +11,6 @@ __pycache__/
 # OS junk
 desktop.ini
 Thumbs.db
+
+# Save data
+pet_save.json
