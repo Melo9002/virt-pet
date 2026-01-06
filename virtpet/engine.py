@@ -2,6 +2,7 @@ import time
 from virtpet.pet import Pet
 from virtpet.persistence import save_pet
 from collections import deque
+from datetime import datetime
 
 
 class GameEngine:
@@ -67,12 +68,24 @@ class GameEngine:
         - Persists state after each advancement
         """
         while self.running:
+            self._update_sleep_state()
             self._update_time()
             time.sleep(0.05)
 
     # -----------------------------
     # Internal Helpers
     # -----------------------------
+
+    # Constant for now Sleep window (local time)
+    SLEEP_START_HOUR = 22  # 10 PM
+    SLEEP_END_HOUR = 6  # 6 AM
+
+    def _is_sleep_time(self) -> bool:
+        now = datetime.now()
+        hour = now.hour
+
+        # Night crosses midnight
+        return hour >= self.SLEEP_START_HOUR or hour < self.SLEEP_END_HOUR
 
     def _update_time(self) -> None:
         """
@@ -108,6 +121,8 @@ class GameEngine:
     Actions.
     """
     def feed(self) -> None:
+        if self.pet.state != self.pet.state.IDLE:
+            return
         self.pet.feed()
         self.log(f"[CARE] You fed {self.pet.name}.")
 
@@ -127,5 +142,28 @@ class GameEngine:
         self.pet.play()
         self.log(f"[PLAY] You played with {self.pet.name}.")
 
+    #pause button
     def toggle_pause(self) -> None:
+        """
+        Toggle simulation pause.
+
+        NOTE:
+        Pause is currently implemented as a flag on the Pet.
+        In the future, pause may be handled entirely by the engine
+        by skipping tick() calls.
+        """
         self.pet.paused = not self.pet.paused
+
+    def _update_sleep_state(self) -> None:
+        """
+        Enforce sleep state based on real-world time.
+        """
+        should_sleep = self._is_sleep_time()
+
+        if should_sleep and self.pet.state != self.pet.state.SLEEPING:
+            self.pet.sleep()
+            self.log(f"[REST] {self.pet.name} fell asleep.")
+
+        elif not should_sleep and self.pet.state == self.pet.state.SLEEPING:
+            self.pet.sleep()
+            self.log(f"[REST] {self.pet.name} woke up.")

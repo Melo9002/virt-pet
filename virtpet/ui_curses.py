@@ -185,9 +185,8 @@ class CursesUI:
 
     def _draw_stats(self, stdscr) -> None:
         stdscr.addstr(6, 0, f"Hunger:     {self.pet.hunger:3}")
-        stdscr.addstr(7, 0, f"Energy:     {self.pet.energy:3}")
-        stdscr.addstr(8, 0, f"Happiness:  {self.pet.happiness:3}")
-        stdscr.addstr(9, 0, f"Toilet:     {self.pet.toilet:3}")
+        stdscr.addstr(7, 0, f"Happiness:  {self.pet.happiness:3}")
+        stdscr.addstr(8, 0, f"Toilet:     {self.pet.toilet:3}")
 
     def _draw_poops(self, stdscr) -> None:
         for y, x in self._poops:
@@ -197,16 +196,14 @@ class CursesUI:
         self._poops.clear()
 
     def _draw_pet(self, stdscr) -> None:
-        pet_y = 10
-        """
-        Poop position
-        """
+        pet_y = 9
+
+        # Poop position
         expected_poops = self.pet.toilet // 20
         while len(self._poops) < expected_poops:
             self._poops.append((pet_y, self._pet_x))
-        """
-        Poop position
-        """
+        # Poop position
+
         if self.pet.paused:
             stdscr.addstr(pet_y, 0, "⏸️ Paused")
         elif self.pet.state == PetState.SLEEPING:
@@ -216,7 +213,7 @@ class CursesUI:
 
     def _draw_footer(self, stdscr) -> None:
         stdscr.addstr(
-            12,
+            11,
             0,
             "[f] Feed  [p] Play  [s] Sleep  [t] Flush  [space] Pause  [q] Quit"
         )

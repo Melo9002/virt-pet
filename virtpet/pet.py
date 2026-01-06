@@ -35,7 +35,7 @@ class Pet:
         # Activity state (what the pet is doing)
         self.state: PetState = PetState.IDLE
 
-        # Time control flag
+        # Time control flag (managed by the engine)
         # Pause freezes time but does NOT change activity
         self.paused: bool = False
 
@@ -46,10 +46,9 @@ class Pet:
         # Core needs (0–100 scale)
         # -----------------------------
         # Hunger: higher = worse
-        # Energy / Happiness: higher = better
+        # Happiness: higher = better
         # Toilet: higher = worse (must be flushed)
         self.hunger: int = 50
-        self.energy: int = 50
         self.happiness: int = 50
         self.toilet: int = 0
 
@@ -77,24 +76,17 @@ class Pet:
             # Passive need progression
             # -------------------------
 
-            # Hunger and toilet always increase over time
+            # Hunger and toilet increase over time
+            # NOTE: In future sleep-by-clock mode, the engine may
+            # skip calling tick() while sleeping.
             self.hunger = min(100, self.hunger + 1)
             self.toilet = min(100, self.toilet + 1)
-
-            if self.state == PetState.SLEEPING:
-                # Sleeping behavior:
-                # - Energy recovers
-                # - Reduced penalties
-                self.energy = min(100, self.energy + 2)
-            else:
-                # IDLE behavior
-                self.energy = max(0, self.energy - 1)
 
             # -------------------------
             # Happiness decay
             # -------------------------
 
-            # Base emotional entropy (always on)
+            # Base emotional entropy (temporary tuning)
             base_decay = random.randint(0, 3)
             self.happiness = max(0, self.happiness - base_decay)
 
@@ -117,9 +109,8 @@ class Pet:
 
     def play(self) -> None:
         """
-        Player action: trade energy for happiness.
+        Player action: adds happiness.
         """
-        self.energy = max(0, self.energy - 15)
         self.happiness = min(100, self.happiness + 15)
 
     def sleep(self) -> None:
@@ -151,7 +142,6 @@ class Pet:
             "name": self.name,
             "age": self.age,
             "hunger": self.hunger,
-            "energy": self.energy,
             "happiness": self.happiness,
             "toilet": self.toilet,
             # Persist activity state to preserve intent
@@ -170,7 +160,6 @@ class Pet:
 
         pet.age = data["age"]
         pet.hunger = data["hunger"]
-        pet.energy = data["energy"]
         pet.happiness = data["happiness"]
         pet.toilet = data.get("toilet", 0)
 
