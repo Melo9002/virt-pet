@@ -1,6 +1,7 @@
 import time
 from virtpet.pet import Pet
 from virtpet.persistence import save_pet
+from collections import deque
 
 
 class GameEngine:
@@ -37,6 +38,9 @@ class GameEngine:
 
         # Main loop control flag
         self.running: bool = True
+
+        #logs
+        self.events = deque(maxlen=5)
 
         # -----------------------------
         # Internal time tracking
@@ -93,3 +97,31 @@ class GameEngine:
 
             # Persist after state changes
             save_pet(self.pet)
+
+    def log(self, message: str) -> None:
+        """
+        Add a semantic event to the event log.
+        """
+        self.events.append(message)
+
+    """
+    Actions.
+    """
+    def feed(self) -> None:
+        self.pet.feed()
+        self.log(f"[CARE] You fed {self.pet.name}.")
+
+    def flush(self) -> None:
+        self.pet.flush()
+        self.log(f"[HYGIENE] You cleaned up after {self.pet.name}.")
+
+    def toggle_sleep(self) -> None:
+        self.pet.sleep()
+        self.log(f"[REST] You put {self.pet.name} to rest.")
+
+    def play(self):
+        self.pet.play()
+        self.log(f"[PLAY] You played with {self.pet.name}.")
+
+    def toggle_pause(self) -> None:
+        self.pet.paused = not self.pet.paused

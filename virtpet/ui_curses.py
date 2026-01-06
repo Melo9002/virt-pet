@@ -110,19 +110,19 @@ class CursesUI:
 
         elif key == ord(" "):
             # Pause toggles time without changing activity
-            self.pet.paused = not self.pet.paused
+            self.engine.toggle_pause()
 
     def _handle_feed(self) -> None:
         if self.pet.state == PetState.IDLE and not self.pet.paused:
-            self.pet.feed()
+            self.engine.feed()
 
     def _handle_play(self) -> None:
         if self.pet.state == PetState.IDLE and not self.pet.paused:
-            self.pet.play()
+            self.engine.play()
 
     def _handle_flush(self) -> None:
         if not self.pet.paused:
-            self.pet.flush()
+            self.engine.flush()
             self._clear_poop()
 
     # -----------------------------
@@ -165,6 +165,7 @@ class CursesUI:
         self._draw_stats(stdscr)
         self._draw_poops(stdscr)
         self._draw_pet(stdscr)
+        self._draw_log(stdscr)
         self._draw_footer(stdscr)
 
         stdscr.refresh()
@@ -219,3 +220,13 @@ class CursesUI:
             0,
             "[f] Feed  [p] Play  [s] Sleep  [t] Flush  [space] Pause  [q] Quit"
         )
+
+    def _draw_log(self, stdscr) -> None:
+        """
+        Draw recent semantic events.
+        """
+        start_y = 14
+        stdscr.addstr(start_y, 0, "Recent events:")
+
+        for i, event in enumerate(self.engine.events):
+            stdscr.addstr(start_y + 1 + i, 0, event)
