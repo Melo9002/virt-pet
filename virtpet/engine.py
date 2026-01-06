@@ -116,8 +116,12 @@ class GameEngine:
         self.log(f"[HYGIENE] You cleaned up after {self.pet.name}.")
 
     def toggle_sleep(self) -> None:
+        was_sleeping = self.pet.state == self.pet.state.SLEEPING
         self.pet.sleep()
-        self.log(f"[REST] You put {self.pet.name} to rest.")
+        if was_sleeping:
+            self.log(f"[REST] You woke {self.pet.name} up.")
+        else:
+            self.log(f"[REST] You put {self.pet.name} to rest.")
 
     def play(self):
         self.pet.play()

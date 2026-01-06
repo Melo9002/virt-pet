@@ -103,7 +103,7 @@ class CursesUI:
             self._handle_play()
 
         elif key == ord("s"):
-            self.pet.sleep()
+            self.engine.toggle_sleep()
 
         elif key == ord("t"):
             self._handle_flush()
