@@ -2,40 +2,65 @@ from enum import Enum
 
 
 class PetState(Enum):
+    """
+    Activity state of the pet.
+    This represents what the pet is doing, not time control.
+    """
     IDLE = "idle"
     SLEEPING = "sleeping"
 
 
 class Pet:
+    """
+    Core domain object representing the virtual pet.
+
+    Responsibilities:
+    - Own all pet state (needs, age, activity)
+    - Define how time affects the pet (tick)
+    - Define player actions (feed, play, sleep)
+    - Serialize / deserialize itself for persistence
+
+    This class is UI-agnostic and engine-agnostic.
+    """
+
+    # -----------------------------
+    # Construction & Identity
+    # -----------------------------
+
     def __init__(self, name: str):
         # Identity
-        self.name = name
+        self.name: str = name
 
-        # What the pet is currently doing
-        self.state = PetState.IDLE
+        # Activity state (what the pet is doing)
+        self.state: PetState = PetState.IDLE
 
-        # Whether time progression is paused
-        # Pause is a modifier, not an activity
-        self.paused = False
+        # Time control flag
+        # Pause freezes time but does NOT change activity
+        self.paused: bool = False
 
         # Age in in-game minutes
-        self.age = 0
+        self.age: int = 0
 
-        # Core needs / emotional state (0–100 scale)
+        # -----------------------------
+        # Core needs (0–100 scale)
+        # -----------------------------
         # Hunger: higher = worse
         # Energy / Happiness: higher = better
-        self.hunger = 50
-        self.energy = 50
-        self.happiness = 50
+        self.hunger: int = 50
+        self.energy: int = 50
+        self.happiness: int = 50
 
-    def tick(self, minutes: int = 1):
+    # -----------------------------
+    # Time Progression
+    # -----------------------------
+
+    def tick(self, minutes: int = 1) -> None:
         """
         Advance the pet by a number of in-game minutes.
 
-        This method is:
-        - time-driven
-        - UI-agnostic
-        - the only place where passive state changes occur
+        Rules:
+        - This is the ONLY place where passive changes occur
+        - UI and engine must call this, never mutate needs directly
         """
 
         # Paused freezes time entirely, regardless of activity
@@ -48,8 +73,8 @@ class Pet:
             if self.state == PetState.SLEEPING:
                 # Sleeping behavior:
                 # - Energy recovers
-                # - Hunger still increases slowly
-                # - No happiness decay (restful state)
+                # - Hunger increases slowly
+                # - No happiness decay
                 self.energy = min(100, self.energy + 2)
                 self.hunger = min(100, self.hunger + 1)
                 continue
@@ -62,7 +87,11 @@ class Pet:
             if self.hunger > 80:
                 self.happiness = max(0, self.happiness - 2)
 
-    def feed(self):
+    # -----------------------------
+    # Player Actions
+    # -----------------------------
+
+    def feed(self) -> None:
         """
         Player action: reduce hunger, small happiness boost.
         Valid only while IDLE (enforced by UI).
@@ -70,14 +99,14 @@ class Pet:
         self.hunger = max(0, self.hunger - 20)
         self.happiness = min(100, self.happiness + 5)
 
-    def play(self):
+    def play(self) -> None:
         """
         Player action: trade energy for happiness.
         """
         self.energy = max(0, self.energy - 15)
         self.happiness = min(100, self.happiness + 15)
 
-    def sleep(self):
+    def sleep(self) -> None:
         """
         Toggle sleeping state.
         """
@@ -85,6 +114,10 @@ class Pet:
             self.state = PetState.IDLE
         else:
             self.state = PetState.SLEEPING
+
+    # -----------------------------
+    # Persistence
+    # -----------------------------
 
     def to_dict(self) -> dict:
         """
@@ -110,6 +143,7 @@ class Pet:
         Backward-compatible with older save files.
         """
         pet = cls(data["name"])
+
         pet.age = data["age"]
         pet.hunger = data["hunger"]
         pet.energy = data["energy"]
@@ -118,7 +152,7 @@ class Pet:
         # Restore activity state (default to IDLE)
         pet.state = PetState(data.get("state", PetState.IDLE.value))
 
-        # Restore pause flag (default to False for older saves)
+        # Restore pause flag (default to False)
         pet.paused = data.get("paused", False)
 
         return pet

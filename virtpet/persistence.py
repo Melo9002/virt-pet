@@ -1,27 +1,47 @@
 import json
 from pathlib import Path
+from typing import Optional
+
 from virtpet.pet import Pet
 
-SAVE_FILE = Path("pet_save.json")
 
+# -----------------------------
+# Persistence Configuration
+# -----------------------------
+
+# Location of the save file.
+# This is intentionally simple for now (local JSON file).
+SAVE_FILE: Path = Path("pet_save.json")
+
+
+# -----------------------------
+# Public Persistence API
+# -----------------------------
 
 def save_pet(pet: Pet) -> None:
     """
-    Persist the pet state to disk.
+    Persist the current pet state to disk.
+
+    This function is intentionally dumb:
+    - It trusts Pet.to_dict() for structure
+    - It always overwrites the save file
+    - It does not handle versioning (yet)
     """
-    with open(SAVE_FILE, "w", encoding="utf-8") as f:
-        json.dump(pet.to_dict(), f, indent=2)
+    with SAVE_FILE.open("w", encoding="utf-8") as file:
+        json.dump(pet.to_dict(), file, indent=2)
 
 
-def load_pet() -> Pet | None:
+def load_pet() -> Optional[Pet]:
     """
-    Load pet from disk if it exists.
-    Returns None if no save is found.
+    Load a pet from disk if a save file exists.
+
+    :return: Pet instance if found, otherwise None
     """
     if not SAVE_FILE.exists():
         return None
 
-    with open(SAVE_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    with SAVE_FILE.open("r", encoding="utf-8") as file:
+        data = json.load(file)
 
+    # Delegate reconstruction to the Pet class
     return Pet.from_dict(data)
