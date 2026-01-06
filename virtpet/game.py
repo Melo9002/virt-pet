@@ -29,7 +29,12 @@ def load_pet() -> Pet:
         return Pet.from_dict(data)
 
     print("A new egg appears...")
-    return Pet("Basilisk-chan")
+    name = input("Give it a name: ").strip()
+
+    if not name:
+        name = "Basilisk-chan"
+
+    return Pet(name)
 
 
 def save_pet(pet: Pet):

@@ -1,11 +1,30 @@
 import curses
-from virtpet.pet import Pet, PetState
+
+from virtpet.pet import PetState
 from virtpet.engine import GameEngine
 
+
 class CursesUI:
+    """
+    Terminal UI using curses.
+
+    Responsibilities:
+    - Draw the pet and stats
+    - Handle keyboard input
+    - Provide simple UI-only animation
+
+    Non-responsibilities:
+    - Time progression
+    - Game logic
+    - Persistence
+    """
+
     def __init__(self, engine: GameEngine):
-        self.engine = engine # Reference to the simulation engine
-        self.pet = engine.pet # Shortcut to the pet for rendering and input handling
+        # Reference to the simulation engine
+        self.engine = engine
+
+        # Shortcut to the pet for rendering and input handling
+        self.pet = engine.pet
 
         # --- UI-only animation state ---
         # Horizontal position of the pet emoji
@@ -15,13 +34,20 @@ class CursesUI:
         self._pet_dir = 1
 
     def run(self):
+        """
+        Entry point for the curses UI.
+        """
         curses.wrapper(self._main)
 
     def _main(self, stdscr):
-        # Curses setup
-        curses.curs_set(0)          # hide cursor
-        stdscr.nodelay(True)        # non-blocking input
-        stdscr.timeout(100)         # refresh every 100ms
+        """
+        Main curses loop.
+
+        `stdscr` = standard screen (curses convention).
+        """
+        curses.curs_set(0)      # Hide cursor
+        stdscr.nodelay(True)    # Non-blocking input
+        stdscr.timeout(100)     # Refresh every 100ms
 
         while self.engine.running:
             self._handle_input(stdscr)
@@ -64,8 +90,8 @@ class CursesUI:
 
     def _update_animation(self, max_width: int):
         """
-        Update pet position for idle animation.
-        Called once per frame.
+        Update idle animation.
+        Moves the pet left/right within the screen bounds.
         """
         if self.pet.state != PetState.IDLE:
             return
@@ -85,8 +111,9 @@ class CursesUI:
         Render the entire screen.
         This redraws every frame instead of printing new lines.
         """
-        PET_Y = 10
-        FOOTER_Y = PET_Y + 2
+        # Layout (content-relative, not terminal-relative)
+        pet_y = 10
+        footer_y = pet_y + 2
 
         stdscr.clear()
         height, width = stdscr.getmaxyx()
@@ -101,9 +128,10 @@ class CursesUI:
         years = days // 365
 
         # Header
-        stdscr.addstr(0, 0, f"{self.pet.name}")
+        stdscr.addstr(0, 0, self.pet.name)
         stdscr.addstr(1, 0, f"State: {self.pet.state.value.upper()}")
 
+        # Time
         stdscr.addstr(3, 0, f"Year {years}, Day {days % 365}")
         stdscr.addstr(4, 0, f"Time {hours % 24:02d}:{minutes % 60:02d}")
 
@@ -114,17 +142,17 @@ class CursesUI:
 
         # Pet visual representation
         if self.pet.paused:
-            # Sleeping or paused pet stays still
-            stdscr.addstr(PET_Y, 0, "⏸️ Paused")
+            # Pause overlays all activities visually
+            stdscr.addstr(pet_y, 0, "⏸️ Paused")
         elif self.pet.state == PetState.SLEEPING:
-            stdscr.addstr(PET_Y, 0, "😴 Sleeping...")
+            stdscr.addstr(pet_y, 0, "😴 Sleeping...")
         else:
             # Idle pet wanders horizontally
-            stdscr.addstr(10, self._pet_x, "🐣")
+            stdscr.addstr(pet_y, self._pet_x, "🐣")
 
         # Controls footer
         stdscr.addstr(
-            FOOTER_Y,
+            footer_y,
             0,
             "[f] Feed  [p] Play  [s] Sleep  [space] Pause  [q] Quit"
         )
