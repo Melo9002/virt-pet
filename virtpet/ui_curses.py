@@ -28,32 +28,39 @@ class CursesUI:
             self._draw(stdscr)
 
     def _handle_input(self, stdscr):
+        """
+        Handle non-blocking keyboard input.
+        Maps keys to player actions or time control.
+        """
         key = stdscr.getch()
 
+        # No key pressed
         if key == -1:
             return
 
         if key == ord("q"):
+            # Quit the application
             self.engine.running = False
 
         elif key == ord("f"):
-            if self.pet.state == PetState.IDLE:
+            # Feed only if the pet is idle and time is running
+            if self.pet.state == PetState.IDLE and not self.pet.paused:
                 self.pet.feed()
 
         elif key == ord("p"):
-            if self.pet.state == PetState.IDLE:
+            # Play only if the pet is idle and time is running
+            if self.pet.state == PetState.IDLE and not self.pet.paused:
                 self.pet.play()
 
         elif key == ord("s"):
-            # Toggle sleeping on/off
+            # Toggle sleeping state (sleep <-> wake)
+            # Sleeping state is preserved across pause/unpause
             self.pet.sleep()
 
-        elif key == ord(" "):  # spacebar
-            # Toggle pause
-            if self.pet.state == PetState.PAUSED:
-                self.pet.state = PetState.IDLE
-            else:
-                self.pet.state = PetState.PAUSED
+        elif key == ord(" "):
+            # Toggle pause without affecting activity state
+            # Pause freezes time but keeps the current activity (idle/sleeping)
+            self.pet.paused = not self.pet.paused
 
     def _update_animation(self, max_width: int):
         """
@@ -106,11 +113,11 @@ class CursesUI:
         stdscr.addstr(8, 0, f"Happiness:  {self.pet.happiness:3}")
 
         # Pet visual representation
-        if self.pet.state == PetState.SLEEPING:
-            # Sleeping pet stays still
-            stdscr.addstr(PET_Y, 0, "😴 Sleeping...")
-        elif self.pet.state == PetState.PAUSED:
+        if self.pet.paused:
+            # Sleeping or paused pet stays still
             stdscr.addstr(PET_Y, 0, "⏸️ Paused")
+        elif self.pet.state == PetState.SLEEPING:
+            stdscr.addstr(PET_Y, 0, "😴 Sleeping...")
         else:
             # Idle pet wanders horizontally
             stdscr.addstr(10, self._pet_x, "🐣")
