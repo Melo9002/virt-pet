@@ -2,7 +2,7 @@ import time
 from virtpet.pet import Pet
 from virtpet.persistence import save_pet
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class GameEngine:
@@ -167,3 +167,48 @@ class GameEngine:
         elif not should_sleep and self.pet.state == self.pet.state.SLEEPING:
             self.pet.sleep()
             self.log(f"[REST] {self.pet.name} woke up.")
+
+    def get_local_time(self) -> str:
+        """
+        Return the user's local time as HH:MM.
+        """
+        now = datetime.now()
+        return now.strftime("%H:%M")
+
+    def get_time_to_next_sleep_transition(self) -> str:
+        """
+        Return a human-readable countdown until the next sleep or wake transition.
+        Examples:
+        - 'Sleeps in 2h 15m'
+        - 'Wakes in 5h 40m'
+        """
+        now = datetime.now()
+
+        if self._is_sleep_time():
+            # Sleeping → count until wake
+            target_hour = self.SLEEP_END_HOUR
+            label = "Wakes in"
+        else:
+            # Awake → count until sleep
+            target_hour = self.SLEEP_START_HOUR
+            label = "Sleeps in"
+
+        target_time = now.replace(
+            hour=target_hour,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        # Handle crossing midnight
+        if target_time <= now:
+            target_time += timedelta(days=1)
+
+        delta = target_time - now
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+
+        return f"{label} {hours}h {minutes}m"
+
+
+

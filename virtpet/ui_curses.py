@@ -161,7 +161,7 @@ class CursesUI:
         self._update_animation(width)
 
         self._draw_header(stdscr)
-        self._draw_time(stdscr)
+        self._draw_time_info(stdscr)
         self._draw_stats(stdscr)
         self._draw_poops(stdscr)
         self._draw_pet(stdscr)
@@ -171,22 +171,17 @@ class CursesUI:
         stdscr.refresh()
 
     def _draw_header(self, stdscr) -> None:
-        stdscr.addstr(0, 0, self.pet.name)
+        stdscr.addstr(0, 0, f"Name: {self.pet.name}")
         stdscr.addstr(1, 0, f"State: {self.pet.state.value.upper()}")
 
-    def _draw_time(self, stdscr) -> None:
-        minutes = self.pet.age
-        hours = minutes // 60
-        days = hours // 24
-        years = days // 365
-
-        stdscr.addstr(3, 0, f"Year {years}, Day {days % 365}")
-        stdscr.addstr(4, 0, f"Time {hours % 24:02d}:{minutes % 60:02d}")
+    def _draw_time_info(self, stdscr) -> None:
+        stdscr.addstr(2, 0, f"Local time: {self.engine.get_local_time()}")
+        stdscr.addstr(3, 0, self.engine.get_time_to_next_sleep_transition())
 
     def _draw_stats(self, stdscr) -> None:
-        stdscr.addstr(6, 0, f"Hunger:     {self.pet.hunger:3}")
-        stdscr.addstr(7, 0, f"Happiness:  {self.pet.happiness:3}")
-        stdscr.addstr(8, 0, f"Toilet:     {self.pet.toilet:3}")
+        stdscr.addstr(5, 0, f"Hunger:     {self.pet.hunger:3}")
+        stdscr.addstr(6, 0, f"Happiness:  {self.pet.happiness:3}")
+        stdscr.addstr(7, 0, f"Toilet:     {self.pet.toilet:3}")
 
     def _draw_poops(self, stdscr) -> None:
         for y, x in self._poops:

@@ -1,5 +1,4 @@
 from enum import Enum
-import random
 
 
 class PetState(Enum):
@@ -52,6 +51,11 @@ class Pet:
         self.happiness: int = 50
         self.toilet: int = 0
 
+        # Internal timers (in in-game minutes)
+        self._hunger_timer = 0
+        self._toilet_timer = 0
+        self._happiness_timer = 0
+
     # -----------------------------
     # Time Progression
     # -----------------------------
@@ -64,13 +68,22 @@ class Pet:
         - This is the ONLY place where passive changes occur
         - UI and engine must call this, never mutate needs directly
         """
+        HUNGER_INTERVAL = 30  # hunger increases every 30 minutes
+        TOILET_INTERVAL = 120  # toilet increases every 120 minutes
+        HAPPINESS_INTERVAL = 60  # passive happiness decay every 60 minutes
 
         # Paused freezes time entirely, regardless of activity
         if self.paused:
             return
 
+        if self.state == PetState.SLEEPING:
+            return  # sleep blocks everything
+
         for _ in range(minutes):
             self.age += 1
+            self._hunger_timer += 1
+            self._toilet_timer += 1
+            self._happiness_timer += 1
 
             # -------------------------
             # Passive need progression
@@ -79,20 +92,26 @@ class Pet:
             # Hunger and toilet increase over time
             # NOTE: In future sleep-by-clock mode, the engine may
             # skip calling tick() while sleeping.
-            self.hunger = min(100, self.hunger + 1)
-            self.toilet = min(100, self.toilet + 1)
+            if self._hunger_timer >= HUNGER_INTERVAL:
+                self.hunger = min(100, self.hunger + 1)
+                self._hunger_timer = 0
+
+            if self._toilet_timer >= TOILET_INTERVAL:
+                self.toilet = min(100, self.toilet + 1)
+                self._toilet_timer = 0
 
             # -------------------------
             # Happiness decay
             # -------------------------
 
             # Base emotional entropy (temporary tuning)
-            base_decay = random.randint(0, 3)
-            self.happiness = max(0, self.happiness - base_decay)
+            if self._happiness_timer >= HAPPINESS_INTERVAL:
+                if self.hunger >= 80 or self.toilet >= 80:
+                    self.happiness = max(0, self.happiness - 5)
+                else:
+                    self.happiness = max(0, self.happiness - 1)
 
-            # Severe neglect penalty
-            if self.hunger == 100 or self.toilet == 100:
-                self.happiness = max(0, self.happiness - 10)
+                self._happiness_timer = 0
 
     # -----------------------------
     # Player Actions
@@ -109,9 +128,12 @@ class Pet:
 
     def play(self) -> None:
         """
-        Player action: adds happiness.
+        Player action: increases happiness but also increases
+        hunger and toilet needs.
         """
         self.happiness = min(100, self.happiness + 15)
+        self.hunger = min(100, self.hunger + 3)
+        self.toilet = min(100, self.toilet + 2)
 
     def sleep(self) -> None:
         """
