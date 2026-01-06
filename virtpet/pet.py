@@ -1,4 +1,5 @@
 from enum import Enum
+import random
 
 
 class PetState(Enum):
@@ -17,7 +18,7 @@ class Pet:
     Responsibilities:
     - Own all pet state (needs, age, activity)
     - Define how time affects the pet (tick)
-    - Define player actions (feed, play, sleep)
+    - Define player actions (feed, play, sleep, flush)
     - Serialize / deserialize itself for persistence
 
     This class is UI-agnostic and engine-agnostic.
@@ -46,9 +47,11 @@ class Pet:
         # -----------------------------
         # Hunger: higher = worse
         # Energy / Happiness: higher = better
+        # Toilet: higher = worse (must be flushed)
         self.hunger: int = 50
         self.energy: int = 50
         self.happiness: int = 50
+        self.toilet: int = 0
 
     # -----------------------------
     # Time Progression
@@ -70,22 +73,34 @@ class Pet:
         for _ in range(minutes):
             self.age += 1
 
+            # -------------------------
+            # Passive need progression
+            # -------------------------
+
+            # Hunger and toilet always increase over time
+            self.hunger = min(100, self.hunger + 1)
+            self.toilet = min(100, self.toilet + 1)
+
             if self.state == PetState.SLEEPING:
                 # Sleeping behavior:
                 # - Energy recovers
-                # - Hunger increases slowly
-                # - No happiness decay
+                # - Reduced penalties
                 self.energy = min(100, self.energy + 2)
-                self.hunger = min(100, self.hunger + 1)
-                continue
+            else:
+                # IDLE behavior
+                self.energy = max(0, self.energy - 1)
 
-            # IDLE behavior
-            self.hunger = min(100, self.hunger + 1)
-            self.energy = max(0, self.energy - 1)
+            # -------------------------
+            # Happiness decay
+            # -------------------------
 
-            # Emotional impact of hunger
-            if self.hunger > 80:
-                self.happiness = max(0, self.happiness - 2)
+            # Base emotional entropy (always on)
+            base_decay = random.randint(0, 3)
+            self.happiness = max(0, self.happiness - base_decay)
+
+            # Severe neglect penalty
+            if self.hunger == 100 or self.toilet == 100:
+                self.happiness = max(0, self.happiness - 10)
 
     # -----------------------------
     # Player Actions
@@ -98,6 +113,7 @@ class Pet:
         """
         self.hunger = max(0, self.hunger - 20)
         self.happiness = min(100, self.happiness + 5)
+        self.toilet = min(100, self.toilet + 5)
 
     def play(self) -> None:
         """
@@ -115,6 +131,13 @@ class Pet:
         else:
             self.state = PetState.SLEEPING
 
+    def flush(self) -> None:
+        """
+        Player action: reset toilet need.
+        This is a hard reset, unlike other needs.
+        """
+        self.toilet = 0
+
     # -----------------------------
     # Persistence
     # -----------------------------
@@ -130,6 +153,7 @@ class Pet:
             "hunger": self.hunger,
             "energy": self.energy,
             "happiness": self.happiness,
+            "toilet": self.toilet,
             # Persist activity state to preserve intent
             "state": self.state.value,
             # Persist pause so time-control survives reloads
@@ -148,6 +172,7 @@ class Pet:
         pet.hunger = data["hunger"]
         pet.energy = data["energy"]
         pet.happiness = data["happiness"]
+        pet.toilet = data.get("toilet", 0)
 
         # Restore activity state (default to IDLE)
         pet.state = PetState(data.get("state", PetState.IDLE.value))

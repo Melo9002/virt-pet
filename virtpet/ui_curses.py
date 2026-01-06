@@ -40,6 +40,9 @@ class CursesUI:
         # Horizontal movement direction (1 = right, -1 = left)
         self._pet_dir: int = 1
 
+        # UI-only poop positions (cosmetic)
+        self._poops: list[tuple[int, int]] = []
+
     # -----------------------------
     # Public API
     # -----------------------------
@@ -102,6 +105,9 @@ class CursesUI:
         elif key == ord("s"):
             self.pet.sleep()
 
+        elif key == ord("t"):
+            self._handle_flush()
+
         elif key == ord(" "):
             # Pause toggles time without changing activity
             self.pet.paused = not self.pet.paused
@@ -113,6 +119,11 @@ class CursesUI:
     def _handle_play(self) -> None:
         if self.pet.state == PetState.IDLE and not self.pet.paused:
             self.pet.play()
+
+    def _handle_flush(self) -> None:
+        if not self.pet.paused:
+            self.pet.flush()
+            self._clear_poop()
 
     # -----------------------------
     # Animation
@@ -152,6 +163,7 @@ class CursesUI:
         self._draw_header(stdscr)
         self._draw_time(stdscr)
         self._draw_stats(stdscr)
+        self._draw_poops(stdscr)
         self._draw_pet(stdscr)
         self._draw_footer(stdscr)
 
@@ -174,10 +186,26 @@ class CursesUI:
         stdscr.addstr(6, 0, f"Hunger:     {self.pet.hunger:3}")
         stdscr.addstr(7, 0, f"Energy:     {self.pet.energy:3}")
         stdscr.addstr(8, 0, f"Happiness:  {self.pet.happiness:3}")
+        stdscr.addstr(9, 0, f"Toilet:     {self.pet.toilet:3}")
+
+    def _draw_poops(self, stdscr) -> None:
+        for y, x in self._poops:
+            stdscr.addstr(y, x, "💩")
+
+    def _clear_poop(self) -> None:
+        self._poops.clear()
 
     def _draw_pet(self, stdscr) -> None:
         pet_y = 10
-
+        """
+        Poop position
+        """
+        expected_poops = self.pet.toilet // 20
+        while len(self._poops) < expected_poops:
+            self._poops.append((pet_y, self._pet_x))
+        """
+        Poop position
+        """
         if self.pet.paused:
             stdscr.addstr(pet_y, 0, "⏸️ Paused")
         elif self.pet.state == PetState.SLEEPING:
@@ -189,5 +217,5 @@ class CursesUI:
         stdscr.addstr(
             12,
             0,
-            "[f] Feed  [p] Play  [s] Sleep  [space] Pause  [q] Quit"
+            "[f] Feed  [p] Play  [s] Sleep  [t] Flush  [space] Pause  [q] Quit"
         )
