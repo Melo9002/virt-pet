@@ -1,4 +1,4 @@
-# virt-pet 🐣
+# virt-pet (Proof of concept... I'll probably rebuild this in Godot at some point.) 🐣
 
 A small terminal-based **real-time virtual pet** experiment written in Python.
 
