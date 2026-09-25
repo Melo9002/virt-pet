@@ -1,100 +1,55 @@
-# virt-pet (Proof of concept... I'll probably rebuild this in Godot at some point.) 🐣
+# virt-pet 🐣
 
-A small terminal-based **real-time virtual pet** experiment written in Python.
+A cozy, real-time virtual pet that lives in your terminal.
 
-This project explores a simple idea:  
-**care, continuity, and responsibility under time constraints**.
+No graphics engine. No AI. Just a tiny creature, a clock that keeps moving, and the consequences of care (or neglect). The code stays deliberately small, readable, and hackable.
 
-No graphics. No AI (yet). Just a tiny creature, a clock that never stops, and the consequences of being present… or not.
+## Features
 
----
+- Continuous real-time simulation rather than turns
+- Animated ASCII pet, color-coded care meters, moods, and event log
+- Feed, play, sleep, wake, tidy, and pause actions
+- Sleep slows hunger and protects happiness while age continues
+- Persistent state with safe, atomic saves
+- Responsive curses UI with a helpful minimum-size screen
 
-## ✨ What This Is
+## Run it
 
-- A **real-time terminal V-pet** inspired by Tamagotchi / Digimon-style games  
-- Uses a **continuous clock** instead of turn-based actions  
-- Features **persistent state** — your pet exists even after you quit  
-- Designed to be **simple, readable, and hackable**
-- Built as a foundation for future experiments (personality, memory, AI narration)
-
-This is intentionally small.  
-Shipping > dreaming.
-
----
-
-## 🧠 Core Concepts
-
-- Time advances automatically (real-time loop)
-- The pet has **activity states** (idle, sleeping)
-- **Pause** freezes time without altering behavior
-- Neglect has consequences
-- Care improves stability, not perfection
-- The pet’s state is deterministic and inspectable
-- No hidden magic — behavior is encoded in rules
-
-The goal is not to simulate intelligence, but **continuity**.
-
----
-
-## 🗂 Project Structure
-
-```
-virt-pet/
-│
-├─ README.md
-├─ requirements.txt
-├─ pyproject.toml
-│
-└─ virtpet/
-   ├─ __init__.py
-   ├─ main.py          # Entry point & startup logic
-   ├─ engine.py        # Real-time clock & ticking engine
-   ├─ persistence.py  # Save / load (JSON)
-   ├─ pet.py           # Pet state machine & rules
-   └─ ui_curses.py     # Terminal UI (curses-based)
-```
-
-**Separation of concerns is intentional and non-negotiable.**
-
----
-
-## ▶ How to Run
-
-### Requirements
-
-- Python **3.10+**
-- On Windows: `windows-curses`
+Requires Python 3.10 or newer. On Windows, the conditional dependency installs `windows-curses`.
 
 ```bash
 pip install -r requirements.txt
-```
-
-```bash
 python -m virtpet.main
 ```
 
----
+Or install an editable command:
 
-## 🎮 Controls
+```bash
+pip install -e .
+virt-pet
+```
+
+The interface needs a terminal at least 64 columns wide and 22 rows tall.
+
+## Controls
 
 | Key | Action |
-|----:|-------|
-| `f` | Feed (idle only) |
-| `p` | Play (idle only) |
-| `s` | Sleep / Wake |
-| `space` | Pause / Unpause time |
-| `q` | Quit |
+| ---: | :--- |
+| `f` | Feed (while awake) |
+| `p` | Play (while awake) |
+| `s` | Sleep / wake |
+| `t` | Tidy up |
+| `space` | Pause / resume time |
+| `q` | Save and quit |
 
----
+## How it works
 
-## 💾 Persistence
+`Pet` owns the state and rules, `GameEngine` translates elapsed time and player intent into changes, `CursesUI` renders and accepts input, and `persistence` handles JSON saves. Those boundaries are intentional.
 
-- State is saved automatically every tick
-- Save file is ignored by git
-- Your pet remembers its past
+State is saved after time advances and after every action. The pet remembers its age, needs, activity, pause state, and internal timers. If a save is invalid, it is preserved as `pet_save.json.corrupt` and a new pet is created.
 
----
+Run the tests with:
 
-## 📜 License
-
-MIT — do what you want.
+```bash
+python -m unittest discover -v
+```

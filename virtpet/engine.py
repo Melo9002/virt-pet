@@ -1,214 +1,73 @@
 import time
-from virtpet.pet import Pet
-from virtpet.persistence import save_pet
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime
+
+from virtpet.persistence import save_pet
+from virtpet.pet import Pet, PetState
 
 
 class GameEngine:
-    """
-    Time-driven simulation engine.
-
-    Responsibilities:
-    - Track real time
-    - Convert real time into in-game minutes
-    - Advance the pet simulation
-    - Trigger persistence
-    - Control the main loop lifecycle
-
-    This class does NOT:
-    - Handle input
-    - Render UI
-    - Contain pet logic
-    """
-
-    # -----------------------------
-    # Construction & Configuration
-    # -----------------------------
+    """Translate elapsed real time and player intent into pet changes."""
 
     def __init__(self, pet: Pet, minutes_per_real_second: float = 1.0):
-        """
-        :param pet: The Pet instance being simulated
-        :param minutes_per_real_second: How many in-game minutes pass per real second
-        """
-        # Core domain object
-        self.pet: Pet = pet
+        self.pet = pet
+        self.minutes_per_real_second = minutes_per_real_second
+        self.running = True
+        self.events: deque[str] = deque(maxlen=4)
+        self._last_time = time.monotonic()
+        self._accumulated_minutes = 0.0
+        self.log(f"{pet.name} is {pet.mood}.")
 
-        # Time scaling factor
-        self.minutes_per_real_second: float = minutes_per_real_second
-
-        # Main loop control flag
-        self.running: bool = True
-
-        #logs
-        self.events = deque(maxlen=5)
-
-        # -----------------------------
-        # Internal time tracking
-        # -----------------------------
-
-        # Last real-world timestamp (seconds)
-        self._last_time: float = time.time()
-
-        # Fractional in-game minutes accumulated
-        self._accumulated_minutes: float = 0.0
-
-    # -----------------------------
-    # Main Loop
-    # -----------------------------
-
-    def run(self) -> None:
-        """
-        Main simulation loop.
-
-        This loop:
-        - Measures real time delta
-        - Converts it to in-game time
-        - Advances the pet in whole-minute steps
-        - Persists state after each advancement
-        """
-        while self.running:
-            self._update_sleep_state()
-            self._update_time()
-            time.sleep(0.05)
-
-    # -----------------------------
-    # Internal Helpers
-    # -----------------------------
-
-    # Constant for now Sleep window (local time)
-    SLEEP_START_HOUR = 22  # 10 PM
-    SLEEP_END_HOUR = 6  # 6 AM
-
-    def _is_sleep_time(self) -> bool:
-        now = datetime.now()
-        hour = now.hour
-
-        # Night crosses midnight
-        return hour >= self.SLEEP_START_HOUR or hour < self.SLEEP_END_HOUR
-
-    def _update_time(self) -> None:
-        """
-        Update accumulated in-game time and advance the simulation
-        in whole-minute increments.
-        """
-        now = time.time()
-        delta_seconds = now - self._last_time
+    def update(self) -> None:
+        now = time.monotonic()
+        delta = max(0.0, now - self._last_time)
         self._last_time = now
-
-        # Convert real time delta to in-game minutes
-        self._accumulated_minutes += (
-            delta_seconds * self.minutes_per_real_second
-        )
-
-        # Only advance whole in-game minutes
+        if self.pet.paused:
+            return
+        self._accumulated_minutes += delta * self.minutes_per_real_second
         whole_minutes = int(self._accumulated_minutes)
-
-        if whole_minutes > 0:
+        if whole_minutes:
             self.pet.tick(whole_minutes)
             self._accumulated_minutes -= whole_minutes
-
-            # Persist after state changes
             save_pet(self.pet)
 
     def log(self, message: str) -> None:
-        """
-        Add a semantic event to the event log.
-        """
-        self.events.append(message)
+        self.events.appendleft(message)
 
-    """
-    Actions.
-    """
+    def _act(self, action, success: str, blocked: str) -> None:
+        if action():
+            self.log(success)
+            save_pet(self.pet)
+        else:
+            self.log(blocked)
+
     def feed(self) -> None:
-        if self.pet.state != self.pet.state.IDLE:
-            return
-        self.pet.feed()
-        self.log(f"[CARE] You fed {self.pet.name}.")
+        self._act(self.pet.feed, f"You shared a tasty snack with {self.pet.name}.",
+                  "Snacks must wait until everyone is awake.")
+
+    def play(self) -> None:
+        self._act(self.pet.play, f"You and {self.pet.name} played together!",
+                  "Playtime must wait until everyone is awake.")
 
     def flush(self) -> None:
-        self.pet.flush()
-        self.log(f"[HYGIENE] You cleaned up after {self.pet.name}.")
+        self._act(self.pet.flush, "Everything is fresh and tidy again.",
+                  "Time is paused; cleaning can wait.")
 
     def toggle_sleep(self) -> None:
-        was_sleeping = self.pet.state == self.pet.state.SLEEPING
-        self.pet.sleep()
-        if was_sleeping:
-            self.log(f"[REST] You woke {self.pet.name} up.")
-        else:
-            self.log(f"[REST] You put {self.pet.name} to rest.")
+        was_sleeping = self.pet.state == PetState.SLEEPING
+        self._act(self.pet.toggle_sleep,
+                  f"{self.pet.name} {'woke up.' if was_sleeping else 'curled up to sleep.'}",
+                  "Unpause before changing the routine.")
 
-    def play(self):
-        self.pet.play()
-        self.log(f"[PLAY] You played with {self.pet.name}.")
-
-    #pause button
     def toggle_pause(self) -> None:
-        """
-        Toggle simulation pause.
-
-        NOTE:
-        Pause is currently implemented as a flag on the Pet.
-        In the future, pause may be handled entirely by the engine
-        by skipping tick() calls.
-        """
         self.pet.paused = not self.pet.paused
+        self._last_time = time.monotonic()
+        self.log("Time is paused." if self.pet.paused else "Time is moving again.")
+        save_pet(self.pet)
 
-    def _update_sleep_state(self) -> None:
-        """
-        Enforce sleep state based on real-world time.
-        """
-        should_sleep = self._is_sleep_time()
-
-        if should_sleep and self.pet.state != self.pet.state.SLEEPING:
-            self.pet.sleep()
-            self.log(f"[REST] {self.pet.name} fell asleep.")
-
-        elif not should_sleep and self.pet.state == self.pet.state.SLEEPING:
-            self.pet.sleep()
-            self.log(f"[REST] {self.pet.name} woke up.")
+    def stop(self) -> None:
+        self.running = False
+        save_pet(self.pet)
 
     def get_local_time(self) -> str:
-        """
-        Return the user's local time as HH:MM.
-        """
-        now = datetime.now()
-        return now.strftime("%H:%M")
-
-    def get_time_to_next_sleep_transition(self) -> str:
-        """
-        Return a human-readable countdown until the next sleep or wake transition.
-        Examples:
-        - 'Sleeps in 2h 15m'
-        - 'Wakes in 5h 40m'
-        """
-        now = datetime.now()
-
-        if self._is_sleep_time():
-            # Sleeping → count until wake
-            target_hour = self.SLEEP_END_HOUR
-            label = "Wakes in"
-        else:
-            # Awake → count until sleep
-            target_hour = self.SLEEP_START_HOUR
-            label = "Sleeps in"
-
-        target_time = now.replace(
-            hour=target_hour,
-            minute=0,
-            second=0,
-            microsecond=0,
-        )
-
-        # Handle crossing midnight
-        if target_time <= now:
-            target_time += timedelta(days=1)
-
-        delta = target_time - now
-        hours = delta.seconds // 3600
-        minutes = (delta.seconds % 3600) // 60
-
-        return f"{label} {hours}h {minutes}m"
-
-
-
+        return datetime.now().strftime("%H:%M")

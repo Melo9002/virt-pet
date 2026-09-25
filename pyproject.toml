@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "virt-pet"
+version = "1.0.0"
+description = "A cozy real-time virtual pet for your terminal"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["windows-curses>=2.4.0; sys_platform == 'win32'"]
+
+[project.scripts]
+virt-pet = "virtpet.main:main"
+
+[tool.setuptools.packages.find]
+include = ["virtpet*"]

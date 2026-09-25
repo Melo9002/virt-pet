@@ -1,47 +1,29 @@
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
 from virtpet.pet import Pet
 
+SAVE_FILE = Path(os.environ.get("VIRTPET_SAVE_FILE", "pet_save.json"))
 
-# -----------------------------
-# Persistence Configuration
-# -----------------------------
-
-# Location of the save file.
-# This is intentionally simple for now (local JSON file).
-SAVE_FILE: Path = Path("pet_save.json")
-
-
-# -----------------------------
-# Public Persistence API
-# -----------------------------
 
 def save_pet(pet: Pet) -> None:
-    """
-    Persist the current pet state to disk.
-
-    This function is intentionally dumb:
-    - It trusts Pet.to_dict() for structure
-    - It always overwrites the save file
-    - It does not handle versioning (yet)
-    """
-    with SAVE_FILE.open("w", encoding="utf-8") as file:
-        json.dump(pet.to_dict(), file, indent=2)
+    """Write atomically so an interrupted save cannot ruin the pet."""
+    temporary = SAVE_FILE.with_suffix(SAVE_FILE.suffix + ".tmp")
+    SAVE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary.write_text(json.dumps(pet.to_dict(), indent=2), encoding="utf-8")
+    temporary.replace(SAVE_FILE)
 
 
 def load_pet() -> Optional[Pet]:
-    """
-    Load a pet from disk if a save file exists.
-
-    :return: Pet instance if found, otherwise None
-    """
     if not SAVE_FILE.exists():
         return None
-
-    with SAVE_FILE.open("r", encoding="utf-8") as file:
-        data = json.load(file)
-
-    # Delegate reconstruction to the Pet class
-    return Pet.from_dict(data)
+    try:
+        return Pet.from_dict(json.loads(SAVE_FILE.read_text(encoding="utf-8")))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError):
+        try:
+            SAVE_FILE.replace(SAVE_FILE.with_suffix(SAVE_FILE.suffix + ".corrupt"))
+        except OSError:
+            pass
+        return None

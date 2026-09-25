@@ -1,224 +1,134 @@
 import curses
 
-from virtpet.pet import PetState
 from virtpet.engine import GameEngine
+from virtpet.pet import PetState
 
 
 class CursesUI:
-    """
-    Terminal-based UI implemented using curses.
-
-    Responsibilities:
-    - Render pet state and stats
-    - Handle keyboard input
-    - Maintain UI-only animation state
-
-    Non-responsibilities:
-    - Game logic
-    - Time progression
-    - Persistence
-    """
-
-    # -----------------------------
-    # Construction
-    # -----------------------------
+    MIN_HEIGHT = 22
+    MIN_WIDTH = 64
 
     def __init__(self, engine: GameEngine):
-        # Reference to the simulation engine
-        self.engine: GameEngine = engine
-
-        # Shortcut to the pet (read-only usage expected)
+        self.engine = engine
         self.pet = engine.pet
-
-        # -----------------------------
-        # UI-only animation state
-        # -----------------------------
-
-        # Horizontal position of the pet sprite
-        self._pet_x: int = 0
-
-        # Horizontal movement direction (1 = right, -1 = left)
-        self._pet_dir: int = 1
-
-        # UI-only poop positions (cosmetic)
-        self._poops: list[tuple[int, int]] = []
-
-    # -----------------------------
-    # Public API
-    # -----------------------------
+        self._frame = 0
+        self._colors = False
 
     def run(self) -> None:
-        """
-        Entry point for the curses UI.
-        """
         curses.wrapper(self._main_loop)
 
-    # -----------------------------
-    # Main Loop
-    # -----------------------------
-
-    def _main_loop(self, stdscr) -> None:
-        """
-        Main curses loop.
-
-        This method:
-        - Configures curses
-        - Runs the input/render loop
-        """
-        self._configure_curses(stdscr)
-
+    def _main_loop(self, screen) -> None:
+        self._configure(screen)
         while self.engine.running:
-            self._handle_input(stdscr)
-            self._draw_frame(stdscr)
+            self._handle_input(screen.getch())
+            self.engine.update()
+            self._draw(screen)
+            self._frame += 1
 
-    def _configure_curses(self, stdscr) -> None:
-        """
-        One-time curses configuration.
-        """
-        curses.curs_set(0)      # Hide cursor
-        stdscr.nodelay(True)    # Non-blocking input
-        stdscr.timeout(100)     # Refresh every 100ms
+    def _configure(self, screen) -> None:
+        try:
+            curses.curs_set(0)
+        except curses.error:
+            pass
+        screen.timeout(100)
+        screen.keypad(True)
+        if curses.has_colors():
+            try:
+                curses.start_color()
+                curses.use_default_colors()
+                curses.init_pair(1, curses.COLOR_CYAN, -1)
+                curses.init_pair(2, curses.COLOR_GREEN, -1)
+                curses.init_pair(3, curses.COLOR_YELLOW, -1)
+                curses.init_pair(4, curses.COLOR_RED, -1)
+                curses.init_pair(5, curses.COLOR_MAGENTA, -1)
+                self._colors = True
+            except curses.error:
+                self._colors = False
 
-    # -----------------------------
-    # Input Handling
-    # -----------------------------
+    def _color(self, pair: int) -> int:
+        return curses.color_pair(pair) if self._colors else 0
 
-    def _handle_input(self, stdscr) -> None:
-        """
-        Handle non-blocking keyboard input.
-        Maps keys to pet actions or time control.
-        """
-        key = stdscr.getch()
-
-        if key == -1:
-            return
-
-        if key == ord("q"):
-            self.engine.running = False
-
-        elif key == ord("f"):
-            self._handle_feed()
-
-        elif key == ord("p"):
-            self._handle_play()
-
-        elif key == ord("s"):
+    def _handle_input(self, key: int) -> None:
+        if key in (ord("q"), ord("Q")):
+            self.engine.stop()
+        elif key in (ord("f"), ord("F")):
+            self.engine.feed()
+        elif key in (ord("p"), ord("P")):
+            self.engine.play()
+        elif key in (ord("s"), ord("S")):
             self.engine.toggle_sleep()
-
-        elif key == ord("t"):
-            self._handle_flush()
-
+        elif key in (ord("t"), ord("T")):
+            self.engine.flush()
         elif key == ord(" "):
-            # Pause toggles time without changing activity
             self.engine.toggle_pause()
 
-    def _handle_feed(self) -> None:
-        if self.pet.state == PetState.IDLE and not self.pet.paused:
-            self.engine.feed()
+    def _put(self, screen, y: int, x: int, text: str, attr: int = 0) -> None:
+        height, width = screen.getmaxyx()
+        if 0 <= y < height and 0 <= x < width - 1:
+            try:
+                screen.addnstr(y, x, text, width - x - 1, attr)
+            except curses.error:
+                pass
 
-    def _handle_play(self) -> None:
-        if self.pet.state == PetState.IDLE and not self.pet.paused:
-            self.engine.play()
+    def _meter(self, value: int, good_high: bool = True) -> tuple[str, int]:
+        filled = round(value / 10)
+        meter = "[" + "#" * filled + "." * (10 - filled) + "]"
+        healthy = value >= 60 if good_high else value <= 40
+        warning = 30 <= value < 60 if good_high else 40 < value < 75
+        color = 2 if healthy else (3 if warning else 4)
+        return meter, self._color(color)
 
-    def _handle_flush(self) -> None:
-        if not self.pet.paused:
-            self.engine.flush()
-            self._clear_poop()
-
-    # -----------------------------
-    # Animation
-    # -----------------------------
-
-    def _update_animation(self, screen_width: int) -> None:
-        """
-        Update idle animation.
-
-        Moves the pet horizontally while idle.
-        """
-        if self.pet.state != PetState.IDLE:
+    def _draw(self, screen) -> None:
+        screen.erase()
+        height, width = screen.getmaxyx()
+        if height < self.MIN_HEIGHT or width < self.MIN_WIDTH:
+            self._put(screen, 0, 0, "This little home needs more room!", curses.A_BOLD)
+            self._put(screen, 2, 0, f"Resize to at least {self.MIN_WIDTH} x {self.MIN_HEIGHT}.")
+            self._put(screen, 4, 0, "[q] quit")
+            screen.refresh()
             return
 
-        self._pet_x += self._pet_dir
+        left = max(0, (width - self.MIN_WIDTH) // 2)
+        inner = self.MIN_WIDTH - 2
+        safe_name = self.pet.name[:32]
+        title = f" {safe_name}'s tiny home "
+        self._put(screen, 0, left, "+" + "-" * inner + "+", self._color(1))
+        self._put(screen, 0, left + (self.MIN_WIDTH - len(title)) // 2, title,
+                  self._color(1) | curses.A_BOLD)
+        for row in range(1, 19):
+            self._put(screen, row, left, "|" + " " * inner + "|", self._color(1))
+        self._put(screen, 19, left, "+" + "-" * inner + "+", self._color(1))
 
-        if self._pet_x <= 0:
-            self._pet_x = 0
-            self._pet_dir = 1
-        elif self._pet_x >= screen_width - 2:
-            self._pet_x = screen_width - 2
-            self._pet_dir = -1
+        status = "PAUSED" if self.pet.paused else self.pet.state.value.upper()
+        self._put(screen, 2, left + 3, f"{self.engine.get_local_time()}  {status}", curses.A_BOLD)
+        self._put(screen, 2, left + 42, f"age {self.pet.age // 60}h {self.pet.age % 60:02}m")
+        self._draw_pet(screen, left)
 
-    # -----------------------------
-    # Rendering
-    # -----------------------------
+        self._put(screen, 4, left + 35, "CARE", curses.A_BOLD | self._color(5))
+        stats = [("Hunger", self.pet.hunger, False),
+                 ("Joy", self.pet.happiness, True),
+                 ("Mess", self.pet.toilet, False)]
+        for index, (label, value, good_high) in enumerate(stats):
+            meter, color = self._meter(value, good_high)
+            self._put(screen, 6 + index * 2, left + 35, f"{label:<7} {meter} {value:3}", color)
+        self._put(screen, 13, left + 35, f"Mood: {self.pet.mood}", curses.A_BOLD)
 
-    def _draw_frame(self, stdscr) -> None:
-        """
-        Render a single frame.
-        """
-        stdscr.clear()
+        self._put(screen, 15, left + 3, "LATEST", curses.A_BOLD | self._color(5))
+        for index, event in enumerate(list(self.engine.events)[:2]):
+            self._put(screen, 16 + index, left + 3, f"> {event}")
 
-        height, width = stdscr.getmaxyx()
-        self._update_animation(width)
+        controls = "[F] feed  [P] play  [S] sleep/wake  [T] tidy  [space] pause  [Q] quit"
+        self._put(screen, 21, max(0, (width - len(controls)) // 2), controls, curses.A_DIM)
+        screen.refresh()
 
-        self._draw_header(stdscr)
-        self._draw_time_info(stdscr)
-        self._draw_stats(stdscr)
-        self._draw_poops(stdscr)
-        self._draw_pet(stdscr)
-        self._draw_log(stdscr)
-        self._draw_footer(stdscr)
-
-        stdscr.refresh()
-
-    def _draw_header(self, stdscr) -> None:
-        stdscr.addstr(0, 0, f"Name: {self.pet.name}")
-        stdscr.addstr(1, 0, f"State: {self.pet.state.value.upper()}")
-
-    def _draw_time_info(self, stdscr) -> None:
-        stdscr.addstr(2, 0, f"Local time: {self.engine.get_local_time()}")
-        stdscr.addstr(3, 0, self.engine.get_time_to_next_sleep_transition())
-
-    def _draw_stats(self, stdscr) -> None:
-        stdscr.addstr(5, 0, f"Hunger:     {self.pet.hunger:3}")
-        stdscr.addstr(6, 0, f"Happiness:  {self.pet.happiness:3}")
-        stdscr.addstr(7, 0, f"Toilet:     {self.pet.toilet:3}")
-
-    def _draw_poops(self, stdscr) -> None:
-        for y, x in self._poops:
-            stdscr.addstr(y, x, "💩")
-
-    def _clear_poop(self) -> None:
-        self._poops.clear()
-
-    def _draw_pet(self, stdscr) -> None:
-        pet_y = 9
-
-        # Poop position
-        expected_poops = self.pet.toilet // 20
-        while len(self._poops) < expected_poops:
-            self._poops.append((pet_y, self._pet_x))
-        # Poop position
-
-        if self.pet.paused:
-            stdscr.addstr(pet_y, 0, "⏸️ Paused")
-        elif self.pet.state == PetState.SLEEPING:
-            stdscr.addstr(pet_y, 0, "😴 Sleeping...")
+    def _draw_pet(self, screen, left: int) -> None:
+        x = left + 7 + ((self._frame // 5) % 2 if not self.pet.paused else 0)
+        if self.pet.state == PetState.SLEEPING:
+            art = ["   z  Z", "  /\\_/\\", " ( -.- )", "  > ^ <"]
         else:
-            stdscr.addstr(pet_y, self._pet_x, "🐣")
-
-    def _draw_footer(self, stdscr) -> None:
-        stdscr.addstr(
-            11,
-            0,
-            "[f] Feed  [p] Play  [s] Sleep  [t] Flush  [space] Pause  [q] Quit"
-        )
-
-    def _draw_log(self, stdscr) -> None:
-        """
-        Draw recent semantic events.
-        """
-        start_y = 14
-        stdscr.addstr(start_y, 0, "Recent events:")
-
-        for i, event in enumerate(self.engine.events):
-            stdscr.addstr(start_y + 1 + i, 0, event)
+            eyes = "^.^" if self.pet.happiness >= 50 else "o.o"
+            art = ["  /\\_/\\", f" ( {eyes} )", "  > ^ <", "  /   \\"]
+        if self.pet.paused:
+            art.append("  [pause]")
+        for row, line in enumerate(art):
+            self._put(screen, 6 + row, x, line, curses.A_BOLD | self._color(3))
