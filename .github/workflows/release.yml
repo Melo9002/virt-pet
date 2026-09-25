@@ -11,8 +11,8 @@ jobs:
   windows-release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -26,7 +26,7 @@ jobs:
       - name: Build portable Windows release
         shell: pwsh
         run: ./scripts/build_release.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: virt-pet-windows-x64
           path: dist/virt-pet-windows-x64.zip
