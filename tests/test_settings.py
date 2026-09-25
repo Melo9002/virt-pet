@@ -3,11 +3,23 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from virtpet.settings import VoiceSettings, load_settings, save_settings
+from virtpet.settings import (
+    VoiceSettings,
+    default_local_server,
+    load_settings,
+    save_settings,
+)
 
 
 class SettingsTests(unittest.TestCase):
+    def test_local_server_matches_the_operating_system(self):
+        with patch("virtpet.settings.sys.platform", "win32"):
+            self.assertEqual(default_local_server(), "runtime/llama-server.exe")
+        with patch("virtpet.settings.sys.platform", "linux"):
+            self.assertEqual(default_local_server(), "runtime/llama-server")
+
     def setUp(self):
         self.old_cwd = os.getcwd()
         self.temporary = tempfile.TemporaryDirectory()

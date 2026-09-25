@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -19,18 +20,74 @@ jobs:
       - name: Install
         run: python -m pip install -e .
       - name: Test
-        run: python -m unittest discover -v
+        run: python -W error -m unittest discover -v
       - name: Add bundled local AI
         shell: pwsh
         run: ./scripts/prepare_local_ai.ps1
+      - name: Smoke-test local AI
+        run: python scripts/smoke_local_ai.py
       - name: Build portable Windows release
         shell: pwsh
         run: ./scripts/build_release.ps1
+      - name: Smoke-test extracted Windows release
+        shell: pwsh
+        run: |
+          Expand-Archive dist/virt-pet-windows-x64.zip smoke
+          ./smoke/virt-pet.exe --help
+          '{"provider":"local"}' | Set-Content -Encoding utf8 smoke/settings.json
+          Push-Location smoke
+          ./virt-pet.exe --voice-test
+          Pop-Location
+          if (Get-Process llama-server -ErrorAction SilentlyContinue) {
+            throw "The packaged local model server did not stop."
+          }
       - uses: actions/upload-artifact@v7
         with:
           name: virt-pet-windows-x64
           path: dist/virt-pet-windows-x64.zip
+
+  linux-release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: python -m pip install -e .
+      - name: Test
+        run: python -W error -m unittest discover -v
+      - name: Add bundled local AI
+        run: bash ./scripts/prepare_local_ai.sh
+      - name: Smoke-test local AI
+        run: python scripts/smoke_local_ai.py
+      - name: Build portable Linux release
+        run: bash ./scripts/build_release.sh
+      - name: Smoke-test extracted Linux release
+        run: |
+          mkdir smoke
+          tar -xzf dist/virt-pet-linux-x64.tar.gz -C smoke
+          ./smoke/virt-pet --help
+          printf '{"provider":"local"}\n' > smoke/settings.json
+          (cd smoke && ./virt-pet --voice-test)
+          ! pgrep -x llama-server
+      - uses: actions/upload-artifact@v7
+        with:
+          name: virt-pet-linux-x64
+          path: dist/virt-pet-linux-x64.tar.gz
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows-release, linux-release]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: virt-pet-*-x64
+          path: release-assets
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: dist/virt-pet-windows-x64.zip
+          files: release-assets/*

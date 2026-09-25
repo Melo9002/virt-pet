@@ -1,7 +1,30 @@
 import curses
+import textwrap
 
 from virtpet.engine import GameEngine
 from virtpet.pet import PetState
+
+
+def _conversation_lines(messages, width: int = 56,
+                        max_lines: int = 3) -> list[str]:
+    """Wrap complete recent messages into the small conversation window."""
+    selected: list[list[str]] = []
+    remaining = max_lines
+    for message in reversed(list(messages)):
+        wrapped = textwrap.wrap(
+            f"{message.speaker}: {message.text}",
+            width=width,
+            subsequent_indent="  ",
+        ) or [f"{message.speaker}:"]
+        if len(wrapped) > remaining:
+            if not selected:
+                selected.append(wrapped[:remaining])
+            break
+        selected.append(wrapped)
+        remaining -= len(wrapped)
+        if remaining == 0:
+            break
+    return [line for group in reversed(selected) for line in group]
 
 
 class CursesUI:
@@ -146,11 +169,10 @@ class CursesUI:
         self._put(screen, 14, left + 35, f"State: {self.pet.condition.value}", curses.A_BOLD)
 
         self._put(screen, 15, left + 3, "CONVERSATION", curses.A_BOLD | self._color(5))
-        messages = list(self.engine.conversation)[-3:]
-        if messages:
-            for index, message in enumerate(messages):
-                text = f"{message.speaker}: {message.text}"[:56]
-                self._put(screen, 16 + index, left + 3, text)
+        lines = _conversation_lines(self.engine.conversation)
+        if lines:
+            for index, line in enumerate(lines):
+                self._put(screen, 16 + index, left + 3, line)
         else:
             self._put(screen, 16, left + 3, f"{self.pet.name} is listening...", curses.A_DIM)
 

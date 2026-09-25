@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
+import signal
+import socket
 import subprocess
 import sys
 import time
@@ -30,9 +34,63 @@ class PetVoice(Protocol):
         ...
 
 
+def _windows_llama_pids() -> set[int]:
+    """Return llama-server PIDs through the native Windows process snapshot API."""
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessEntry(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", wintypes.WCHAR * 260),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    snapshot_processes = kernel32.CreateToolhelp32Snapshot
+    snapshot_processes.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    snapshot_processes.restype = wintypes.HANDLE
+    process_first = kernel32.Process32FirstW
+    process_first.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry)]
+    process_first.restype = wintypes.BOOL
+    process_next = kernel32.Process32NextW
+    process_next.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessEntry)]
+    process_next.restype = wintypes.BOOL
+
+    snapshot = snapshot_processes(0x00000002, 0)
+    if snapshot == wintypes.HANDLE(-1).value:
+        return set()
+    pids = set()
+    entry = ProcessEntry()
+    entry.dwSize = ctypes.sizeof(ProcessEntry)
+    try:
+        if process_first(snapshot, ctypes.byref(entry)):
+            while True:
+                if entry.szExeFile.lower() == "llama-server.exe":
+                    pids.add(entry.th32ProcessID)
+                if not process_next(snapshot, ctypes.byref(entry)):
+                    break
+        return pids
+    finally:
+        kernel32.CloseHandle(snapshot)
+
+
 def _instructions(pet: Pet) -> str:
     return (
-        f"You are {pet.name}, a tiny virtual pet. Reply in one cute sentence of "
+        f"You are {pet.name}, a tiny virtual pet speaking to a human player. "
+        f"Your name is {pet.name}; never use that name for the human. "
+        "Messages marked as user come from the human, and messages marked as "
+        "assistant are your own earlier replies. Answer the newest user message "
+        "directly without repeating it. Say 'I' for yourself and 'you' for the "
+        "human. Example: if the user asks 'Can you hear me?', answer 'Yes, I can "
+        "hear you!' Reply in one cute sentence of "
         "at most 15 words. Be warm, playful, and slightly silly. Never act like "
         "an assistant. Do not claim the pet's condition changed. "
         f"Current condition: {pet.condition.value}. Hunger: {pet.hunger}/100. "
@@ -41,9 +99,40 @@ def _instructions(pet: Pet) -> str:
     )
 
 
-def _history_text(history: Sequence[ChatMessage], message: str) -> str:
-    recent = "\n".join(f"{item.speaker}: {item.text}" for item in history[-6:])
-    return f"{recent}\nuser: {message}" if recent else message
+def _provider_messages(
+    pet: Pet, history: Sequence[ChatMessage], message: str
+) -> list[dict[str, str]]:
+    messages = []
+    for item in history[-6:]:
+        role = "assistant" if item.speaker == pet.name else "user"
+        messages.append({"role": role, "content": item.text})
+    messages.append({"role": "user", "content": message})
+    return messages
+
+
+def _local_messages(
+    pet: Pet, history: Sequence[ChatMessage], message: str
+) -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": _instructions(pet)},
+        *_provider_messages(pet, history, message),
+    ]
+
+
+def _bounded_reply(text: str, max_words: int = 15) -> str:
+    """Enforce the tiny one-sentence reply promised by every AI voice."""
+    normalized = " ".join(text.strip().split())
+    if not normalized:
+        raise RuntimeError("The provider returned no text")
+    first_sentence = re.match(r"^.*?[.!?](?:\s|$)", normalized)
+    if first_sentence:
+        normalized = first_sentence.group(0).strip()
+    words = normalized.split()
+    if len(words) > max_words:
+        return " ".join(words[:max_words]).rstrip(",;:") + "..."
+    if normalized[-1] not in ".!?":
+        normalized += "."
+    return normalized
 
 
 class OpenAIVoice:
@@ -60,7 +149,7 @@ class OpenAIVoice:
         payload = json.dumps({
             "model": self.model,
             "instructions": _instructions(pet),
-            "input": _history_text(history, message),
+            "input": _provider_messages(pet, history, message),
             "max_output_tokens": 40,
             "store": False,
         }).encode("utf-8")
@@ -76,7 +165,7 @@ class OpenAIVoice:
         for output in data.get("output", []):
             for content in output.get("content", []):
                 if content.get("type") == "output_text" and content.get("text"):
-                    return content["text"].strip()
+                    return _bounded_reply(content["text"])
         raise RuntimeError("The API returned no text")
 
 
@@ -88,18 +177,31 @@ class LocalLlamaVoice:
         self.model_path = model_path
         self.port = port
         self._process: subprocess.Popen | None = None
+        self._initial_process_ids: set[int] = set()
 
     def _ensure_server(self) -> None:
         if self._process is not None and self._process.poll() is None:
             return
         if not self.server_path.exists() or not self.model_path.exists():
             raise FileNotFoundError("Local model runtime is not installed")
-        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        try:
+            with socket.create_connection(("127.0.0.1", self.port), timeout=0.2):
+                raise RuntimeError(f"Local model port {self.port} is already in use")
+        except OSError:
+            pass
+        flags = 0
+        start_new_session = False
+        if sys.platform == "win32":
+            flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+            self._initial_process_ids = _windows_llama_pids()
+        else:
+            start_new_session = True
         self._process = subprocess.Popen(
             [str(self.server_path), "-m", str(self.model_path), "--host", "127.0.0.1",
              "--port", str(self.port), "-c", "1024", "-ngl", "0"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             creationflags=flags,
+            start_new_session=start_new_session,
         )
         health = f"http://127.0.0.1:{self.port}/health"
         for _ in range(100):
@@ -117,10 +219,7 @@ class LocalLlamaVoice:
               history: Sequence[ChatMessage] = ()) -> str:
         self._ensure_server()
         payload = json.dumps({
-            "messages": [
-                {"role": "system", "content": _instructions(pet)},
-                {"role": "user", "content": _history_text(history, message)},
-            ],
+            "messages": _local_messages(pet, history, message),
             "max_tokens": 40,
             "temperature": 0.8,
         }).encode("utf-8")
@@ -129,15 +228,42 @@ class LocalLlamaVoice:
             data=payload, headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(request, timeout=60) as response:
             data = json.loads(response.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"].strip()
+        return _bounded_reply(data["choices"][0]["message"]["content"])
 
     def close(self) -> None:
         if self._process is not None and self._process.poll() is None:
-            self._process.terminate()
-            try:
-                self._process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["taskkill", "/PID", str(self._process.pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+                stopped_processes = {self._process.pid}
+                for _ in range(20):
+                    time.sleep(0.1)
+                    spawned_processes = (
+                        _windows_llama_pids()
+                        - self._initial_process_ids
+                        - stopped_processes
+                    )
+                    for process_id in spawned_processes:
+                        subprocess.run(
+                            ["taskkill", "/PID", str(process_id), "/T", "/F"],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            check=False,
+                        )
+                    stopped_processes.update(spawned_processes)
+            else:
+                os.killpg(self._process.pid, signal.SIGTERM)
+                try:
+                    self._process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    os.killpg(self._process.pid, signal.SIGKILL)
+                    self._process.wait(timeout=3)
+            self._process = None
+            self._initial_process_ids.clear()
 
 
 class ResilientVoice:

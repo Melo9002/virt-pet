@@ -34,6 +34,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="choose the conversation provider again",
     )
+    parser.add_argument(
+        "--voice-test",
+        action="store_true",
+        help="test the configured conversation provider and exit",
+    )
     return parser.parse_args(argv)
 
 
@@ -61,6 +66,15 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     speed = 60.0 if args.debug else 1.0
     voice, voice_name = build_voice(setup_voice(force=args.setup))
+    if args.voice_test:
+        try:
+            reply = voice.reply(Pet("Release Chick"), "Can you hear me?", ())
+            print(f"{voice_name}: {reply}")
+        finally:
+            close = getattr(voice, "close", None)
+            if close is not None:
+                close()
+        return
     engine = GameEngine(create_pet(), minutes_per_real_second=speed, voice=voice)
     engine.voice_name = voice_name
     try:

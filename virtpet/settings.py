@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+import sys
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -9,12 +10,17 @@ SETTINGS_FILE = Path("settings.json")
 PROVIDERS = {"classic", "local", "openai"}
 
 
+def default_local_server() -> str:
+    executable = "llama-server.exe" if sys.platform == "win32" else "llama-server"
+    return f"runtime/{executable}"
+
+
 @dataclass
 class VoiceSettings:
     provider: str = "classic"
     model: str = "gpt-5.4-nano"
     local_model: str = "models/smollm2-360m-instruct-q8_0.gguf"
-    local_server: str = "runtime/llama-server.exe"
+    local_server: str = field(default_factory=default_local_server)
 
 
 def load_settings() -> VoiceSettings | None:

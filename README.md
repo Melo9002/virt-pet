@@ -20,6 +20,23 @@ What began as a proof of concept is now a deliberately small, complete virtual-p
 
 The voice can describe the pet, but it cannot change the simulation. Python remains the source of truth for every need and action.
 
+## Run a portable edition
+
+Download the archive for your x64 system from the latest GitHub release:
+
+- **Windows:** extract `virt-pet-windows-x64.zip`, then run `virt-pet.exe` in a terminal.
+- **Linux:** extract `virt-pet-linux-x64.tar.gz`, then run `./virt-pet` in a terminal.
+
+Both portable editions include the local model and llama.cpp runtime, so they
+do not require Python, Ollama, an account, or an internet connection. The Linux
+artifact is built and smoke-tested on Ubuntu 22.04 for compatibility with a
+broad range of current distributions, including Linux Mint releases based on
+Ubuntu 22.04 or newer.
+
+Keep the extracted folders beside the executable; the Local AI option needs
+the bundled `models/` and `runtime/` files. The first local reply starts the
+model server and may take slightly longer than later replies.
+
 ## Run from source
 
 Requires Python 3.10 or newer.
@@ -41,25 +58,52 @@ Works immediately and always remains available as the fallback. No model, accoun
 
 ### Local AI
 
-On a Windows development machine, prepare the official SmolLM2 GGUF model and a CPU-only llama.cpp runtime:
+Prepare the official SmolLM2 GGUF model and a CPU-only llama.cpp runtime for
+your operating system.
+
+Windows:
 
 ```powershell
 ./scripts/prepare_local_ai.ps1
 python -m virtpet.main --setup
 ```
 
+Linux:
+
+```bash
+bash ./scripts/prepare_local_ai.sh
+python -m virtpet.main --setup
+```
+
 Choose option 2. Generated `models/`, `runtime/`, and third-party license directories stay outside Git but are included by the release builder. The download is approximately 386 MB plus the runtime.
+
+If the model or runtime is missing, cannot start, or cannot generate a reply,
+the pet automatically answers with its Classic voice instead. Quitting the game
+also shuts down the local model server.
 
 ### OpenAI API
 
 Set the key in the environment, then select option 3 during setup:
+
+Windows PowerShell:
 
 ```powershell
 $env:OPENAI_API_KEY = "your-key-here"
 virt-pet --setup
 ```
 
+Linux:
+
+```bash
+export OPENAI_API_KEY="your-key-here"
+virt-pet --setup
+```
+
 If the environment variable is absent, the game requests the key with hidden input for that process only. It never stores the key in `settings.json`, the save file, or Git. The adapter uses the OpenAI Responses API and defaults to `gpt-5.4-nano`; setup allows a different model ID.
+
+API access is entirely optional. Invalid keys, unavailable models, exhausted
+quota, and network failures fall back to the Classic voice without affecting
+the pet simulation.
 
 ## Controls
 
@@ -81,6 +125,12 @@ Run one in-game hour per real second while balancing the simulation:
 virt-pet --debug
 ```
 
+Test the configured conversation provider without opening the interface:
+
+```bash
+virt-pet --voice-test
+```
+
 Run the test suite:
 
 ```bash
@@ -89,16 +139,26 @@ python -m unittest discover -v
 
 GitHub Actions runs it on Windows and Linux with Python 3.10 and 3.13 for every push and pull request.
 
-## Build a Windows release
+## Build portable releases
 
-For the complete offline edition:
+Windows:
 
 ```powershell
 ./scripts/prepare_local_ai.ps1
 ./scripts/build_release.ps1
 ```
 
-The resulting portable archive is `dist/virt-pet-windows-x64.zip`. A tag such as `v0.1.0` runs tests, assembles the local AI edition, builds the executable, and publishes the archive to a GitHub release automatically.
+Linux:
+
+```bash
+bash ./scripts/prepare_local_ai.sh
+bash ./scripts/build_release.sh
+```
+
+These produce `dist/virt-pet-windows-x64.zip` and
+`dist/virt-pet-linux-x64.tar.gz`, respectively. A tag such as `v1.0.0` runs
+tests, assembles and smoke-tests both local-AI editions, and publishes both
+archives to one GitHub release automatically.
 
 ## Design
 
