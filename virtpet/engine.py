@@ -21,6 +21,7 @@ class GameEngine:
         self.events: deque[str] = deque(maxlen=4)
         self.conversation: deque[ChatMessage] = deque(maxlen=8)
         self.voice = voice or FallbackVoice()
+        self.voice_name = "classic"
         self._clock = clock
         self._save = saver
         self._last_time = self._clock()
@@ -88,6 +89,9 @@ class GameEngine:
     def stop(self) -> None:
         self.running = False
         self._save(self.pet)
+        close = getattr(self.voice, "close", None)
+        if close is not None:
+            close()
 
     def get_local_time(self) -> str:
         return datetime.now().strftime("%H:%M")

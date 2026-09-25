@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: python -m pip install -e .
+      - name: Test
+        run: python -m unittest discover -v
+      - name: Add bundled local AI
+        shell: pwsh
+        run: ./scripts/prepare_local_ai.ps1
+      - name: Build portable Windows release
+        shell: pwsh
+        run: ./scripts/build_release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: virt-pet-windows-x64
+          path: dist/virt-pet-windows-x64.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/virt-pet-windows-x64.zip

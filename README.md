@@ -1,66 +1,114 @@
 # virt-pet 🐣
 
-A cozy, real-time virtual pet that lives in your terminal.
+A tiny real-time creature that lives, grows, and chats in your terminal.
 
-No graphics engine. No AI. Just a tiny creature, a clock that keeps moving, and the consequences of care (or neglect). The code stays deliberately small, readable, and hackable.
+What began as a proof of concept is now a deliberately small, complete virtual-pet game: deterministic simulation underneath, optional generative personality on top, and no cloud dependency unless the player chooses one.
 
 ## Features
 
-- Continuous real-time simulation rather than turns
-- Animated ASCII pet, color-coded care meters, moods, and event log
-- Six wellbeing states: content, hungry, lonely, dirty, sleepy, and sick
+- Animated, responsive curses interface
+- Hunger, happiness, mess, tiredness, sleep, age, and persistent internal timers
+- Six derived conditions: content, hungry, lonely, dirty, sleepy, and sick
 - Feed, play, sleep, wake, tidy, pause, and chat actions
-- A deterministic offline personality behind a provider-independent voice interface
-- Sleep slows hunger and protects happiness while age continues
-- Persistent state with safe, atomic saves
-- Responsive curses UI with a helpful minimum-size screen
+- Atomic JSON saves with recovery from invalid files
+- Three interchangeable conversation modes:
+  - **Classic:** cute deterministic replies, offline and dependency-free
+  - **Local AI:** bundled SmolLM2 through llama.cpp, private and offline
+  - **OpenAI:** short generated replies through the Responses API
+- Safe fallback to Classic mode if an optional provider fails
+- Accelerated debug mode and automated tests
 
-## Run it
+The voice can describe the pet, but it cannot change the simulation. Python remains the source of truth for every need and action.
 
-Requires Python 3.10 or newer. On Windows, the conditional dependency installs `windows-curses`.
+## Run from source
 
-```bash
-pip install -r requirements.txt
-python -m virtpet.main
-```
-
-Or install an editable command:
+Requires Python 3.10 or newer.
 
 ```bash
-pip install -e .
+python -m pip install -e .
 virt-pet
 ```
 
+On first launch, choose how the pet should speak. Run `virt-pet --setup` whenever you want to choose again. Local preferences are written to the ignored `settings.json`; secrets are never written there.
+
 The interface needs a terminal at least 64 columns wide and 27 rows tall.
 
-To accelerate the simulation to one in-game hour per real second while balancing it:
+## Conversation modes
 
-```bash
-python -m virtpet.main --debug
+### Classic
+
+Works immediately and always remains available as the fallback. No model, account, or network is needed.
+
+### Local AI
+
+On a Windows development machine, prepare the official SmolLM2 GGUF model and a CPU-only llama.cpp runtime:
+
+```powershell
+./scripts/prepare_local_ai.ps1
+python -m virtpet.main --setup
 ```
+
+Choose option 2. Generated `models/`, `runtime/`, and third-party license directories stay outside Git but are included by the release builder. The download is approximately 386 MB plus the runtime.
+
+### OpenAI API
+
+Set the key in the environment, then select option 3 during setup:
+
+```powershell
+$env:OPENAI_API_KEY = "your-key-here"
+virt-pet --setup
+```
+
+If the environment variable is absent, the game requests the key with hidden input for that process only. It never stores the key in `settings.json`, the save file, or Git. The adapter uses the OpenAI Responses API and defaults to `gpt-5.4-nano`; setup allows a different model ID.
 
 ## Controls
 
 | Key | Action |
 | ---: | :--- |
-| `f` | Feed (while awake) |
-| `p` | Play (while awake) |
-| `s` | Sleep / wake |
+| `c` | Chat (`Enter` sends, `Esc` cancels) |
+| `f` | Feed while awake |
+| `p` | Play while awake |
+| `s` | Sleep or wake |
 | `t` | Tidy up |
-| `c` | Talk to your pet (`Enter` sends, `Esc` cancels) |
-| `space` | Pause / resume time |
+| `space` | Pause or resume time |
 | `q` | Save and quit |
 
-## How it works
+## Debug and tests
 
-`Pet` owns the state and rules, `GameEngine` translates elapsed time and player intent into changes, `CursesUI` renders and accepts input, and `persistence` handles JSON saves. `PetVoice` is the small provider-neutral boundary for dialogue; the built-in `FallbackVoice` works without a model, network, or API key. Those boundaries are intentional.
+Run one in-game hour per real second while balancing the simulation:
 
-State is saved after time advances and after every action. The pet remembers its age, needs, activity, pause state, and internal timers. If a save is invalid, it is preserved as `pet_save.json.corrupt` and a new pet is created.
+```bash
+virt-pet --debug
+```
 
-Run the tests locally with:
+Run the test suite:
 
 ```bash
 python -m unittest discover -v
 ```
 
-Every push and pull request also runs the suite automatically on Windows and Linux with Python 3.10 and 3.13.
+GitHub Actions runs it on Windows and Linux with Python 3.10 and 3.13 for every push and pull request.
+
+## Build a Windows release
+
+For the complete offline edition:
+
+```powershell
+./scripts/prepare_local_ai.ps1
+./scripts/build_release.ps1
+```
+
+The resulting portable archive is `dist/virt-pet-windows-x64.zip`. A tag such as `v0.1.0` runs tests, assembles the local AI edition, builds the executable, and publishes the archive to a GitHub release automatically.
+
+## Design
+
+- `pet.py` owns state and deterministic rules.
+- `engine.py` owns elapsed time, actions, dialogue history, and lifecycle.
+- `ui_curses.py` owns terminal input and presentation.
+- `persistence.py` owns safe save/load behavior.
+- `voice.py` owns the provider-neutral voice contract and adapters.
+- `settings.py` owns non-secret local preferences and first-run setup.
+
+## License
+
+The game is MIT licensed. Bundled llama.cpp and SmolLM2 licenses are included in full release archives.

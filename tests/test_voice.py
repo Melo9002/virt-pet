@@ -1,7 +1,7 @@
 import unittest
 
 from virtpet.pet import Pet
-from virtpet.voice import ChatMessage, FallbackVoice
+from virtpet.voice import ChatMessage, FallbackVoice, ResilientVoice
 
 
 class FallbackVoiceTests(unittest.TestCase):
@@ -16,6 +16,16 @@ class FallbackVoiceTests(unittest.TestCase):
     def test_reply_reflects_condition(self):
         reply = FallbackVoice().reply(Pet("Pip", hunger=80), "How are you?")
         self.assertIn("hungry", reply)
+
+    def test_provider_failure_falls_back(self):
+        class BrokenVoice:
+            def reply(self, pet, message, history=()):
+                raise RuntimeError("nope")
+
+        voice = ResilientVoice(BrokenVoice())
+        reply = voice.reply(Pet("Pip"), "hello")
+        self.assertIn("Pip", reply)
+        self.assertEqual(voice.last_error, "nope")
 
 
 if __name__ == "__main__":

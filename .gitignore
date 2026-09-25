@@ -24,3 +24,11 @@ settings.json
 secrets.json
 credentials.json
 *.key
+
+# Generated AI and release assets
+models/
+runtime/
+THIRD_PARTY_LICENSES/
+build/
+dist/
+*.spec

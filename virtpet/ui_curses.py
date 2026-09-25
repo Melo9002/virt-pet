@@ -53,9 +53,13 @@ class CursesUI:
     def _handle_input(self, screen, key: int) -> None:
         if self._chatting:
             if key in (10, 13, curses.KEY_ENTER):
-                self.engine.talk(self._chat_buffer)
+                message = self._chat_buffer
                 self._chat_buffer = ""
                 self._set_chat_mode(screen, False)
+                if message.strip():
+                    self.engine.log(f"{self.pet.name} is thinking...")
+                    self._draw(screen)
+                    self.engine.talk(message)
             elif key == 27:
                 self._chat_buffer = ""
                 self._set_chat_mode(screen, False)
@@ -128,6 +132,7 @@ class CursesUI:
             status += f"  DEBUG x{self.engine.minutes_per_real_second:g}"
         self._put(screen, 2, left + 3, f"{self.engine.get_local_time()}  {status}", curses.A_BOLD)
         self._put(screen, 2, left + 42, f"age {self.pet.age // 60}h {self.pet.age % 60:02}m")
+        self._put(screen, 3, left + 3, f"voice: {self.engine.voice_name}", curses.A_DIM)
         self._draw_pet(screen, left)
 
         self._put(screen, 4, left + 35, "CARE", curses.A_BOLD | self._color(5))

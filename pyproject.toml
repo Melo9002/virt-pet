@@ -4,11 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "virt-pet"
-version = "1.0.0"
+version = "0.1.0"
 description = "A cozy real-time virtual pet for your terminal"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["windows-curses>=2.4.0; sys_platform == 'win32'"]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
 
 [project.scripts]
 virt-pet = "virtpet.main:main"
