@@ -9,6 +9,17 @@ class PetState(str, Enum):
     SLEEPING = "sleeping"
 
 
+class PetCondition(str, Enum):
+    """The pet's most pressing emotional or physical condition."""
+
+    CONTENT = "content"
+    HUNGRY = "hungry"
+    LONELY = "lonely"
+    DIRTY = "dirty"
+    SLEEPY = "sleepy"
+    SICK = "sick"
+
+
 def _clamp(value: int) -> int:
     return max(0, min(100, int(value)))
 
@@ -24,9 +35,11 @@ class Pet:
     hunger: int = 35
     happiness: int = 70
     toilet: int = 0
+    tiredness: int = 0
     _hunger_timer: int = 0
     _toilet_timer: int = 0
     _happiness_timer: int = 0
+    _tiredness_timer: int = 0
 
     def tick(self, minutes: int = 1) -> None:
         if self.paused or minutes <= 0:
@@ -36,6 +49,7 @@ class Pet:
             self._hunger_timer += 1
             self._toilet_timer += 1
             self._happiness_timer += 1
+            self._tiredness_timer += 1
             hunger_interval = 60 if self.state == PetState.SLEEPING else 30
             if self._hunger_timer >= hunger_interval:
                 self.hunger = _clamp(self.hunger + 1)
@@ -50,19 +64,32 @@ class Pet:
                 self.happiness = _clamp(self.happiness - decay)
                 self._happiness_timer = 0
 
+            tiredness_interval = 5 if self.state == PetState.SLEEPING else 15
+            if self._tiredness_timer >= tiredness_interval:
+                change = -1 if self.state == PetState.SLEEPING else 1
+                self.tiredness = _clamp(self.tiredness + change)
+                self._tiredness_timer = 0
+
+    @property
+    def condition(self) -> PetCondition:
+        critical_needs = sum((self.hunger >= 90, self.toilet >= 90,
+                              self.happiness <= 10, self.tiredness >= 95))
+        if critical_needs >= 2:
+            return PetCondition.SICK
+        if self.hunger >= 70:
+            return PetCondition.HUNGRY
+        if self.toilet >= 65:
+            return PetCondition.DIRTY
+        if self.happiness <= 35:
+            return PetCondition.LONELY
+        if self.tiredness >= 70 or self.state == PetState.SLEEPING:
+            return PetCondition.SLEEPY
+        return PetCondition.CONTENT
+
     @property
     def mood(self) -> str:
-        if self.hunger >= 85:
-            return "famished"
-        if self.toilet >= 80:
-            return "uncomfortable"
-        if self.happiness <= 25:
-            return "lonely"
-        if self.state == PetState.SLEEPING:
-            return "dreaming"
-        if self.happiness >= 80:
-            return "delighted"
-        return "content"
+        """Compatibility-friendly display name for the current condition."""
+        return self.condition.value
 
     def feed(self) -> bool:
         if self.state != PetState.IDLE or self.paused:
@@ -78,6 +105,7 @@ class Pet:
         self.happiness = _clamp(self.happiness + 15)
         self.hunger = _clamp(self.hunger + 3)
         self.toilet = _clamp(self.toilet + 2)
+        self.tiredness = _clamp(self.tiredness + 8)
         return True
 
     def toggle_sleep(self) -> bool:
@@ -93,12 +121,14 @@ class Pet:
         return True
 
     def to_dict(self) -> dict:
-        return {"version": 1, "name": self.name, "age": self.age,
+        return {"version": 2, "name": self.name, "age": self.age,
                 "hunger": self.hunger, "happiness": self.happiness,
-                "toilet": self.toilet, "state": self.state.value,
+                "toilet": self.toilet, "tiredness": self.tiredness,
+                "state": self.state.value,
                 "paused": self.paused, "timers": {
                     "hunger": self._hunger_timer, "toilet": self._toilet_timer,
-                    "happiness": self._happiness_timer}}
+                    "happiness": self._happiness_timer,
+                    "tiredness": self._tiredness_timer}}
 
     @classmethod
     def from_dict(cls, data: dict) -> "Pet":
@@ -113,6 +143,8 @@ class Pet:
                    hunger=_clamp(data.get("hunger", 35)),
                    happiness=_clamp(data.get("happiness", 70)),
                    toilet=_clamp(data.get("toilet", 0)),
+                   tiredness=_clamp(data.get("tiredness", 0)),
                    _hunger_timer=max(0, int(timers.get("hunger", 0))),
                    _toilet_timer=max(0, int(timers.get("toilet", 0))),
-                   _happiness_timer=max(0, int(timers.get("happiness", 0))))
+                   _happiness_timer=max(0, int(timers.get("happiness", 0))),
+                   _tiredness_timer=max(0, int(timers.get("tiredness", 0))))

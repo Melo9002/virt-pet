@@ -1,6 +1,6 @@
 import unittest
 
-from virtpet.pet import Pet, PetState
+from virtpet.pet import Pet, PetCondition, PetState
 
 
 class PetTests(unittest.TestCase):
@@ -32,6 +32,19 @@ class PetTests(unittest.TestCase):
                              "happiness": -2, "state": "unknown"})
         self.assertEqual((pet.hunger, pet.happiness), (100, 0))
         self.assertEqual(pet.state, PetState.IDLE)
+
+    def test_conditions_are_prioritized(self):
+        self.assertEqual(Pet("Pip", hunger=70).condition, PetCondition.HUNGRY)
+        self.assertEqual(Pet("Pip", toilet=65).condition, PetCondition.DIRTY)
+        self.assertEqual(Pet("Pip", happiness=35).condition, PetCondition.LONELY)
+        self.assertEqual(Pet("Pip", tiredness=70).condition, PetCondition.SLEEPY)
+        sick = Pet("Pip", hunger=95, toilet=95)
+        self.assertEqual(sick.condition, PetCondition.SICK)
+
+    def test_sleep_restores_tiredness(self):
+        pet = Pet("Pip", state=PetState.SLEEPING, tiredness=20)
+        pet.tick(10)
+        self.assertEqual(pet.tiredness, 18)
 
 
 if __name__ == "__main__":

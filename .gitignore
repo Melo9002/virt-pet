@@ -14,3 +14,13 @@ Thumbs.db
 
 # Save data
 pet_save.json
+pet_save.json.*
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+settings.json
+secrets.json
+credentials.json
+*.key

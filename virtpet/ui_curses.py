@@ -5,7 +5,7 @@ from virtpet.pet import PetState
 
 
 class CursesUI:
-    MIN_HEIGHT = 22
+    MIN_HEIGHT = 27
     MIN_WIDTH = 64
 
     def __init__(self, engine: GameEngine):
@@ -13,6 +13,8 @@ class CursesUI:
         self.pet = engine.pet
         self._frame = 0
         self._colors = False
+        self._chatting = False
+        self._chat_buffer = ""
 
     def run(self) -> None:
         curses.wrapper(self._main_loop)
@@ -20,7 +22,7 @@ class CursesUI:
     def _main_loop(self, screen) -> None:
         self._configure(screen)
         while self.engine.running:
-            self._handle_input(screen.getch())
+            self._handle_input(screen, screen.getch())
             self.engine.update()
             self._draw(screen)
             self._frame += 1
@@ -48,7 +50,20 @@ class CursesUI:
     def _color(self, pair: int) -> int:
         return curses.color_pair(pair) if self._colors else 0
 
-    def _handle_input(self, key: int) -> None:
+    def _handle_input(self, screen, key: int) -> None:
+        if self._chatting:
+            if key in (10, 13, curses.KEY_ENTER):
+                self.engine.talk(self._chat_buffer)
+                self._chat_buffer = ""
+                self._set_chat_mode(screen, False)
+            elif key == 27:
+                self._chat_buffer = ""
+                self._set_chat_mode(screen, False)
+            elif key in (curses.KEY_BACKSPACE, 8, 127):
+                self._chat_buffer = self._chat_buffer[:-1]
+            elif 32 <= key <= 126 and len(self._chat_buffer) < 160:
+                self._chat_buffer += chr(key)
+            return
         if key in (ord("q"), ord("Q")):
             self.engine.stop()
         elif key in (ord("f"), ord("F")):
@@ -61,6 +76,15 @@ class CursesUI:
             self.engine.flush()
         elif key == ord(" "):
             self.engine.toggle_pause()
+        elif key in (ord("c"), ord("C")):
+            self._set_chat_mode(screen, True)
+
+    def _set_chat_mode(self, screen, enabled: bool) -> None:
+        self._chatting = enabled
+        try:
+            curses.curs_set(1 if enabled else 0)
+        except curses.error:
+            pass
 
     def _put(self, screen, y: int, x: int, text: str, attr: int = 0) -> None:
         height, width = screen.getmaxyx()
@@ -95,11 +119,13 @@ class CursesUI:
         self._put(screen, 0, left, "+" + "-" * inner + "+", self._color(1))
         self._put(screen, 0, left + (self.MIN_WIDTH - len(title)) // 2, title,
                   self._color(1) | curses.A_BOLD)
-        for row in range(1, 19):
+        for row in range(1, 23):
             self._put(screen, row, left, "|" + " " * inner + "|", self._color(1))
-        self._put(screen, 19, left, "+" + "-" * inner + "+", self._color(1))
+        self._put(screen, 23, left, "+" + "-" * inner + "+", self._color(1))
 
         status = "PAUSED" if self.pet.paused else self.pet.state.value.upper()
+        if self.engine.minutes_per_real_second != 1.0:
+            status += f"  DEBUG x{self.engine.minutes_per_real_second:g}"
         self._put(screen, 2, left + 3, f"{self.engine.get_local_time()}  {status}", curses.A_BOLD)
         self._put(screen, 2, left + 42, f"age {self.pet.age // 60}h {self.pet.age % 60:02}m")
         self._draw_pet(screen, left)
@@ -107,18 +133,38 @@ class CursesUI:
         self._put(screen, 4, left + 35, "CARE", curses.A_BOLD | self._color(5))
         stats = [("Hunger", self.pet.hunger, False),
                  ("Joy", self.pet.happiness, True),
-                 ("Mess", self.pet.toilet, False)]
+                 ("Mess", self.pet.toilet, False),
+                 ("Tired", self.pet.tiredness, False)]
         for index, (label, value, good_high) in enumerate(stats):
             meter, color = self._meter(value, good_high)
             self._put(screen, 6 + index * 2, left + 35, f"{label:<7} {meter} {value:3}", color)
-        self._put(screen, 13, left + 35, f"Mood: {self.pet.mood}", curses.A_BOLD)
+        self._put(screen, 14, left + 35, f"State: {self.pet.condition.value}", curses.A_BOLD)
 
-        self._put(screen, 15, left + 3, "LATEST", curses.A_BOLD | self._color(5))
-        for index, event in enumerate(list(self.engine.events)[:2]):
-            self._put(screen, 16 + index, left + 3, f"> {event}")
+        self._put(screen, 15, left + 3, "CONVERSATION", curses.A_BOLD | self._color(5))
+        messages = list(self.engine.conversation)[-3:]
+        if messages:
+            for index, message in enumerate(messages):
+                text = f"{message.speaker}: {message.text}"[:56]
+                self._put(screen, 16 + index, left + 3, text)
+        else:
+            self._put(screen, 16, left + 3, f"{self.pet.name} is listening...", curses.A_DIM)
 
-        controls = "[F] feed  [P] play  [S] sleep/wake  [T] tidy  [space] pause  [Q] quit"
-        self._put(screen, 21, max(0, (width - len(controls)) // 2), controls, curses.A_DIM)
+        self._put(screen, 20, left + 3, "LATEST", curses.A_BOLD | self._color(5))
+        if self.engine.events:
+            self._put(screen, 21, left + 3, f"> {self.engine.events[0]}"[:57])
+
+        if self._chatting:
+            prompt = f"Say (Enter sends, Esc cancels): {self._chat_buffer}"
+            self._put(screen, 25, left, prompt[:62], curses.A_BOLD)
+            try:
+                screen.move(25, min(width - 2, left + len(prompt[:62])))
+            except curses.error:
+                pass
+        else:
+            first = "[C] chat  [F] feed  [P] play  [S] sleep/wake"
+            second = "[T] tidy  [space] pause  [Q] save & quit"
+            self._put(screen, 24, max(0, (width - len(first)) // 2), first, curses.A_DIM)
+            self._put(screen, 25, max(0, (width - len(second)) // 2), second, curses.A_DIM)
         screen.refresh()
 
     def _draw_pet(self, screen, left: int) -> None:
