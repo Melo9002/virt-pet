@@ -30,6 +30,7 @@ def _conversation_lines(messages, width: int = 56,
 class CursesUI:
     MIN_HEIGHT = 27
     MIN_WIDTH = 64
+    ROOM_WIDTH = 76
 
     def __init__(self, engine: GameEngine):
         self.engine = engine
@@ -139,12 +140,14 @@ class CursesUI:
             screen.refresh()
             return
 
-        left = max(0, (width - self.MIN_WIDTH) // 2)
-        inner = self.MIN_WIDTH - 2
+        home_width = self.ROOM_WIDTH if width >= self.ROOM_WIDTH else self.MIN_WIDTH
+        expanded = home_width == self.ROOM_WIDTH
+        left = max(0, (width - home_width) // 2)
+        inner = home_width - 2
         safe_name = self.pet.name[:32]
         title = f" {safe_name}'s tiny home "
         self._put(screen, 0, left, "+" + "-" * inner + "+", self._color(1))
-        self._put(screen, 0, left + (self.MIN_WIDTH - len(title)) // 2, title,
+        self._put(screen, 0, left + (home_width - len(title)) // 2, title,
                   self._color(1) | curses.A_BOLD)
         for row in range(1, 23):
             self._put(screen, row, left, "|" + " " * inner + "|", self._color(1))
@@ -154,22 +157,27 @@ class CursesUI:
         if self.engine.minutes_per_real_second != 1.0:
             status += f"  DEBUG x{self.engine.minutes_per_real_second:g}"
         self._put(screen, 2, left + 3, f"{self.engine.get_local_time()}  {status}", curses.A_BOLD)
-        self._put(screen, 2, left + 42, f"age {self.pet.age // 60}h {self.pet.age % 60:02}m")
+        age_x = 52 if expanded else 42
+        self._put(screen, 2, left + age_x, f"age {self.pet.age // 60}h {self.pet.age % 60:02}m")
         self._put(screen, 3, left + 3, f"voice: {self.engine.voice_status}", curses.A_DIM)
-        self._draw_pet(screen, left)
+        if expanded:
+            self._draw_room(screen, left)
+        else:
+            self._draw_pet(screen, left + 7)
 
-        self._put(screen, 4, left + 35, "CARE", curses.A_BOLD | self._color(5))
+        care_x = 43 if expanded else 35
+        self._put(screen, 4, left + care_x, "CARE", curses.A_BOLD | self._color(5))
         stats = [("Hunger", self.pet.hunger, False),
                  ("Joy", self.pet.happiness, True),
                  ("Mess", self.pet.toilet, False),
                  ("Tired", self.pet.tiredness, False)]
         for index, (label, value, good_high) in enumerate(stats):
             meter, color = self._meter(value, good_high)
-            self._put(screen, 6 + index * 2, left + 35, f"{label:<7} {meter} {value:3}", color)
-        self._put(screen, 14, left + 35, f"State: {self.pet.condition.value}", curses.A_BOLD)
+            self._put(screen, 6 + index * 2, left + care_x, f"{label:<7} {meter} {value:3}", color)
+        self._put(screen, 14, left + care_x, f"State: {self.pet.condition.value}", curses.A_BOLD)
 
         self._put(screen, 15, left + 3, "CONVERSATION", curses.A_BOLD | self._color(5))
-        lines = _conversation_lines(self.engine.conversation)
+        lines = _conversation_lines(self.engine.conversation, width=home_width - 8)
         if lines:
             for index, line in enumerate(lines):
                 self._put(screen, 16 + index, left + 3, line)
@@ -178,7 +186,8 @@ class CursesUI:
 
         self._put(screen, 20, left + 3, "LATEST", curses.A_BOLD | self._color(5))
         if self.engine.events:
-            self._put(screen, 21, left + 3, f"> {self.engine.events[0]}"[:57])
+            self._put(screen, 21, left + 3,
+                      f"> {self.engine.events[0]}"[:home_width - 7])
 
         if self._chatting:
             prompt = f"Say (Enter sends, Esc cancels): {self._chat_buffer}"
@@ -194,11 +203,29 @@ class CursesUI:
             self._put(screen, 25, max(0, (width - len(second)) // 2), second, curses.A_DIM)
         screen.refresh()
 
-    def _draw_pet(self, screen, left: int) -> None:
-        x = left + 7
+    def _draw_pet(self, screen, x: int) -> None:
         art = pet_art(self.pet.condition, self.pet.state, self._frame,
                       paused=self.pet.paused)
         for row, line in enumerate(art):
             self._put(screen, 6 + row, x, line, curses.A_BOLD | self._color(3))
         if self.pet.paused:
             self._put(screen, 11, x + 2, "[pause]", curses.A_DIM)
+
+    def _draw_room(self, screen, left: int) -> None:
+        """Draw the wider diorama without affecting compact terminals."""
+        try:
+            hour = int(self.engine.get_local_time().split(":", 1)[0])
+        except (ValueError, IndexError):
+            hour = 12
+        if 6 <= hour < 18:
+            window = (".-----.", "| \\|/ |", "| -O- |", "'-----'")
+        else:
+            window = (".-----.", "| * . |", "|  .  |", "'-----'")
+        for row, line in enumerate(window):
+            self._put(screen, 5 + row, left + 3, line, self._color(1))
+
+        self._draw_pet(screen, left + 13)
+        furniture = ((8, 28, "  ____"), (9, 28, " /___/|"),
+                     (10, 28, " |___||"))
+        for row, x, line in furniture:
+            self._put(screen, row, left + x, line, curses.A_DIM | self._color(3))

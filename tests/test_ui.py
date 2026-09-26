@@ -1,8 +1,10 @@
 import unittest
 
+from virtpet.engine import GameEngine
 from virtpet.pet import PetCondition, PetState
+from virtpet.pet import Pet
 from virtpet.sprites import pet_art
-from virtpet.ui_curses import _conversation_lines
+from virtpet.ui_curses import CursesUI, _conversation_lines
 from virtpet.voice import ChatMessage
 
 
@@ -50,6 +52,46 @@ class PetSpriteTests(unittest.TestCase):
         art = pet_art(PetCondition.SLEEPY, PetState.SLEEPING, frame=5)
 
         self.assertIn("z Z", "\n".join(art))
+
+
+class FakeScreen:
+    def __init__(self, height, width):
+        self.height = height
+        self.width = width
+        self.writes = []
+
+    def erase(self):
+        self.writes.clear()
+
+    def getmaxyx(self):
+        return self.height, self.width
+
+    def addnstr(self, y, x, text, _length, _attr):
+        self.writes.append((y, x, text))
+
+    def refresh(self):
+        pass
+
+
+class ResponsiveRoomTests(unittest.TestCase):
+    def _draw_at(self, width):
+        engine = GameEngine(Pet("Pip"), saver=lambda _pet: None)
+        screen = FakeScreen(27, width)
+        CursesUI(engine)._draw(screen)
+        return [text for _y, _x, text in screen.writes]
+
+    def test_compact_terminal_keeps_the_unfurnished_layout(self):
+        rendered = self._draw_at(64)
+
+        self.assertNotIn(".-----.", rendered)
+        self.assertIn("+" + "-" * 62 + "+", rendered)
+
+    def test_wide_terminal_gets_the_room_and_wider_border(self):
+        rendered = self._draw_at(76)
+
+        self.assertIn(".-----.", rendered)
+        self.assertIn(" |___||", rendered)
+        self.assertIn("+" + "-" * 74 + "+", rendered)
 
 
 if __name__ == "__main__":

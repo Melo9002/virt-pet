@@ -86,9 +86,14 @@ def _instructions(pet: Pet) -> str:
     activity = "asleep" if pet.state == PetState.SLEEPING else "awake"
     acting_cue = {
         PetCondition.CONTENT: "Sound cheerful, cozy, and curious.",
-        PetCondition.HUNGRY: "Sound hungry and hopeful; snacks may color your answer.",
+        PetCondition.HUNGRY: (
+            "Your tummy is rumbling and you really want a snack. Mention hunger "
+            "or food naturally in your reply."
+        ),
         PetCondition.LONELY: "Sound tender and especially glad the human is here.",
-        PetCondition.DIRTY: "Sound sheepish about your messy little home.",
+        PetCondition.DIRTY: (
+            "Your room needs tidying. Sound sheepish about the mess, not your body."
+        ),
         PetCondition.SLEEPY: "Sound drowsy, with a soft half-asleep reply.",
         PetCondition.SICK: "Sound quiet and wobbly, and ask for gentle care if relevant.",
     }[pet.condition]
@@ -117,12 +122,31 @@ def _instructions(pet: Pet) -> str:
 
 
 def _provider_messages(
-    pet: Pet, history: Sequence[ChatMessage], message: str
+    pet: Pet, history: Sequence[ChatMessage], message: str,
+    *, reinforce_scene: bool = False,
 ) -> list[dict[str, str]]:
     messages = []
     for item in history[-6:]:
         role = "assistant" if item.speaker == pet.name else "user"
         messages.append({"role": role, "content": item.text})
+    if reinforce_scene:
+        if pet.state == PetState.SLEEPING:
+            reminder = "You are asleep. Reply drowsily without waking up."
+        else:
+            reminder = {
+                PetCondition.CONTENT: "You are awake and content.",
+                PetCondition.HUNGRY: (
+                    "Your tummy is rumbling and you want a snack. Mention hunger "
+                    "or food naturally in this reply."
+                ),
+                PetCondition.LONELY: "You are awake and lonely; sound glad for company.",
+                PetCondition.DIRTY: (
+                    "Your room is messy and needs tidying. React sheepishly to the mess."
+                ),
+                PetCondition.SLEEPY: "You are awake but sleepy; sound drowsy.",
+                PetCondition.SICK: "You are awake but sick; sound quiet and wobbly.",
+            }[pet.condition]
+        message = f"[{reminder}] Visitor says: {message}"
     messages.append({"role": "user", "content": message})
     return messages
 
@@ -132,7 +156,7 @@ def _local_messages(
 ) -> list[dict[str, str]]:
     return [
         {"role": "system", "content": _instructions(pet)},
-        *_provider_messages(pet, history, message),
+        *_provider_messages(pet, history, message, reinforce_scene=True),
     ]
 
 

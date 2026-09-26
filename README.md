@@ -48,7 +48,9 @@ virt-pet
 
 On first launch, choose how the pet should speak. Run `virt-pet --setup` whenever you want to choose again. Local preferences are written to the ignored `settings.json`; secrets are never written there.
 
-The interface needs a terminal at least 64 columns wide and 27 rows tall.
+The interface needs a terminal at least 64 columns wide and 27 rows tall. At
+76 columns or wider, it automatically expands into a furnished tiny room while
+keeping the compact layout available for smaller terminals.
 
 ## Conversation modes
 

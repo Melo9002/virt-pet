@@ -106,7 +106,42 @@ class FallbackVoiceTests(unittest.TestCase):
             [message["role"] for message in messages],
             ["system", "user", "assistant", "user"],
         )
-        self.assertEqual(messages[-1]["content"], "Can you hear me?")
+        self.assertEqual(
+            messages[-1]["content"],
+            "[You are awake and content.] Visitor says: Can you hear me?",
+        )
+
+    def test_local_message_reinforces_sleep_next_to_the_request(self):
+        messages = _local_messages(
+            Pet("Little Guy", state=PetState.SLEEPING),
+            (),
+            "Are you awake?",
+        )
+
+        self.assertEqual(
+            messages[-1]["content"],
+            "[You are asleep. Reply drowsily without waking up.] "
+            "Visitor says: Are you awake?",
+        )
+
+    def test_local_message_explains_that_dirty_means_a_messy_room(self):
+        messages = _local_messages(
+            Pet("Little Guy", toilet=70),
+            (),
+            "How are you?",
+        )
+
+        self.assertIn("room is messy and needs tidying", messages[-1]["content"])
+
+    def test_local_message_makes_hunger_a_concrete_reply_cue(self):
+        messages = _local_messages(
+            Pet("Little Guy", hunger=80),
+            (),
+            "What are you thinking about?",
+        )
+
+        self.assertIn("tummy is rumbling", messages[-1]["content"])
+        self.assertIn("Mention hunger or food", messages[-1]["content"])
 
     def test_sleeping_pet_gets_an_explicit_drowsy_scene(self):
         instructions = _instructions(
