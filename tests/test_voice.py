@@ -13,6 +13,7 @@ from virtpet.voice import (
     ResilientVoice,
     _bounded_reply,
     _instructions,
+    _is_repetitive_reply,
     _local_messages,
 )
 
@@ -176,6 +177,46 @@ class FallbackVoiceTests(unittest.TestCase):
         reply = _bounded_reply(" ".join(f"word{number}" for number in range(20)))
         self.assertEqual(len(reply.split()), 15)
         self.assertTrue(reply.endswith("..."))
+
+    def test_repeated_phrase_is_rejected(self):
+        self.assertTrue(
+            _is_repetitive_reply("I'm fine, I'm fine.", Pet("Pip"), ())
+        )
+
+    def test_self_contradicting_repetition_is_rejected(self):
+        self.assertTrue(
+            _is_repetitive_reply("I'm not okay, I'm okay.", Pet("Pip"), ())
+        )
+
+    def test_exact_recent_pet_reply_is_rejected(self):
+        history = (
+            ChatMessage("you", "How are you?"),
+            ChatMessage("Pip", "I'm fine."),
+        )
+
+        self.assertTrue(_is_repetitive_reply("I'm fine.", Pet("Pip"), history))
+
+    def test_normal_repeated_words_are_allowed(self):
+        self.assertFalse(
+            _is_repetitive_reply("I really, really want a snack!", Pet("Pip"), ())
+        )
+
+    def test_local_voice_retries_one_repetitive_answer(self):
+        voice = LocalLlamaVoice(Path("server"), Path("model"))
+        history = (ChatMessage("Pip", "I'm fine."),)
+        with (
+            patch.object(voice, "_ensure_server"),
+            patch.object(
+                voice,
+                "_completion",
+                side_effect=["I'm fine.", "My room is embarrassingly messy!"],
+            ) as completion,
+        ):
+            reply = voice.reply(Pet("Pip", toilet=80), "Are you okay?", history)
+
+        self.assertEqual(reply, "My room is embarrassingly messy!")
+        self.assertEqual(completion.call_count, 2)
+        self.assertEqual(completion.call_args_list[1].kwargs["temperature"], 0.95)
 
     def test_same_context_has_same_reply(self):
         voice = FallbackVoice()

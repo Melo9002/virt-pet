@@ -176,6 +176,28 @@ def _bounded_reply(text: str, max_words: int = 15) -> str:
     return normalized
 
 
+def _is_repetitive_reply(text: str, pet: Pet,
+                         history: Sequence[ChatMessage]) -> bool:
+    """Catch obvious tiny-model loops without policing harmless word reuse."""
+    lowered = text.lower().replace("’", "'")
+    if re.search(r"\bi(?:'m| am) not ([a-z]+)[,; ]+i(?:'m| am) \1\b", lowered):
+        return True
+    words = re.findall(r"[a-z0-9]+", lowered)
+    normalized = " ".join(words)
+    recent_pet_replies = {
+        " ".join(re.findall(r"[a-z0-9]+", item.text.lower()))
+        for item in history[-6:]
+        if item.speaker == pet.name
+    }
+    if normalized in recent_pet_replies:
+        return True
+    for size in range(2, len(words) // 2 + 1):
+        for start in range(0, len(words) - size * 2 + 1):
+            if words[start:start + size] == words[start + size:start + size * 2]:
+                return True
+    return False
+
+
 class OpenAIVoice:
     """Small standard-library adapter for OpenAI's Responses API."""
 
@@ -259,10 +281,23 @@ class LocalLlamaVoice:
     def reply(self, pet: Pet, message: str,
               history: Sequence[ChatMessage] = ()) -> str:
         self._ensure_server()
+        messages = _local_messages(pet, history, message)
+        reply = self._completion(messages)
+        if _is_repetitive_reply(reply, pet, history):
+            messages[-1]["content"] += (
+                " [Use completely different wording. Do not repeat an earlier "
+                "reply or repeat a phrase.]"
+            )
+            reply = self._completion(messages, temperature=0.95)
+        return reply
+
+    def _completion(self, messages: list[dict[str, str]],
+                    temperature: float = 0.8) -> str:
         payload = json.dumps({
-            "messages": _local_messages(pet, history, message),
+            "messages": messages,
             "max_tokens": 40,
-            "temperature": 0.8,
+            "temperature": temperature,
+            "repeat_penalty": 1.15,
         }).encode("utf-8")
         request = urllib.request.Request(
             f"http://127.0.0.1:{self.port}/v1/chat/completions",

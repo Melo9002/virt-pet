@@ -93,6 +93,27 @@ class ResponsiveRoomTests(unittest.TestCase):
         self.assertIn(" |___||", rendered)
         self.assertIn("+" + "-" * 74 + "+", rendered)
 
+    def test_feed_reaction_is_temporary(self):
+        engine = GameEngine(Pet("Pip"), saver=lambda _pet: None)
+        ui = CursesUI(engine)
+        screen = FakeScreen(27, 76)
+        ui._react("feed", True)
+
+        ui._draw(screen)
+        self.assertIn("(___)", [text for _y, _x, text in screen.writes])
+
+        ui._frame = 14
+        ui._draw(screen)
+        self.assertNotIn("(___)", [text for _y, _x, text in screen.writes])
+
+    def test_blocked_action_does_not_start_a_reaction(self):
+        engine = GameEngine(Pet("Pip"), saver=lambda _pet: None)
+        ui = CursesUI(engine)
+
+        ui._react("play", False)
+
+        self.assertIsNone(ui._reaction)
+
 
 if __name__ == "__main__":
     unittest.main()

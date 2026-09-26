@@ -49,8 +49,13 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(self.pet.age, 1)
 
     def test_actions_save_immediately(self):
-        self.engine.feed()
+        self.assertTrue(self.engine.feed())
         self.assertEqual(len(self.saved), 1)
+
+    def test_blocked_action_reports_failure(self):
+        self.pet.paused = True
+
+        self.assertFalse(self.engine.play())
 
     def test_chat_is_trimmed_and_keeps_roles(self):
         self.engine.talk("   hello    there   ")

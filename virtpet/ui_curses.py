@@ -39,6 +39,7 @@ class CursesUI:
         self._colors = False
         self._chatting = False
         self._chat_buffer = ""
+        self._reaction: tuple[str, int] | None = None
 
     def run(self) -> None:
         curses.wrapper(self._main_loop)
@@ -95,13 +96,13 @@ class CursesUI:
         if key in (ord("q"), ord("Q")):
             self.engine.stop()
         elif key in (ord("f"), ord("F")):
-            self.engine.feed()
+            self._react("feed", self.engine.feed())
         elif key in (ord("p"), ord("P")):
-            self.engine.play()
+            self._react("play", self.engine.play())
         elif key in (ord("s"), ord("S")):
             self.engine.toggle_sleep()
         elif key in (ord("t"), ord("T")):
-            self.engine.flush()
+            self._react("tidy", self.engine.flush())
         elif key == ord(" "):
             self.engine.toggle_pause()
         elif key in (ord("c"), ord("C")):
@@ -113,6 +114,10 @@ class CursesUI:
             curses.curs_set(1 if enabled else 0)
         except curses.error:
             pass
+
+    def _react(self, action: str, succeeded: bool) -> None:
+        if succeeded:
+            self._reaction = (action, self._frame)
 
     def _put(self, screen, y: int, x: int, text: str, attr: int = 0) -> None:
         height, width = screen.getmaxyx()
@@ -164,6 +169,7 @@ class CursesUI:
             self._draw_room(screen, left)
         else:
             self._draw_pet(screen, left + 7)
+        self._draw_reaction(screen, left, expanded)
 
         care_x = 43 if expanded else 35
         self._put(screen, 4, left + care_x, "CARE", curses.A_BOLD | self._color(5))
@@ -229,3 +235,27 @@ class CursesUI:
                      (10, 28, " |___||"))
         for row, x, line in furniture:
             self._put(screen, row, left + x, line, curses.A_DIM | self._color(3))
+
+    def _draw_reaction(self, screen, left: int, expanded: bool) -> None:
+        if self._reaction is None:
+            return
+        action, started = self._reaction
+        elapsed = self._frame - started
+        if elapsed >= 14:
+            self._reaction = None
+            return
+
+        pet_x = left + (13 if expanded else 7)
+        if action == "feed":
+            crumb = "." if (elapsed // 2) % 2 else "*"
+            self._put(screen, 10, pet_x + 9, crumb, self._color(3))
+            self._put(screen, 11, pet_x + 7, "(___)", self._color(3))
+        elif action == "play":
+            travel = elapsed if elapsed < 7 else 13 - elapsed
+            self._put(screen, 11 - (travel % 3 == 1), left + 3 + travel * 3,
+                      "o", curses.A_BOLD | self._color(5))
+        elif action == "tidy":
+            sparkle = "*" if (elapsed // 2) % 2 else "+"
+            self._put(screen, 7, pet_x + 12, sparkle, self._color(1))
+            self._put(screen, 8, pet_x + 10, "\\|", self._color(3))
+            self._put(screen, 9, pet_x + 11, "\\", self._color(3))

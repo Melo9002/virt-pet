@@ -44,24 +44,35 @@ class GameEngine:
     def log(self, message: str) -> None:
         self.events.appendleft(message)
 
-    def _act(self, action, success: str, blocked: str) -> None:
+    def _act(self, action, success: str, blocked: str) -> bool:
         if action():
             self.log(success)
             self._save(self.pet)
+            return True
         else:
             self.log(blocked)
+            return False
 
-    def feed(self) -> None:
-        self._act(self.pet.feed, f"You shared a tasty snack with {self.pet.name}.",
-                  "Snacks must wait until everyone is awake.")
+    def feed(self) -> bool:
+        return self._act(
+            self.pet.feed,
+            f"You shared a tasty snack with {self.pet.name}.",
+            "Snacks must wait until everyone is awake.",
+        )
 
-    def play(self) -> None:
-        self._act(self.pet.play, f"You and {self.pet.name} played together!",
-                  "Playtime must wait until everyone is awake.")
+    def play(self) -> bool:
+        return self._act(
+            self.pet.play,
+            f"You and {self.pet.name} played together!",
+            "Playtime must wait until everyone is awake.",
+        )
 
-    def flush(self) -> None:
-        self._act(self.pet.flush, "Everything is fresh and tidy again.",
-                  "Time is paused; cleaning can wait.")
+    def flush(self) -> bool:
+        return self._act(
+            self.pet.flush,
+            "Everything is fresh and tidy again.",
+            "Time is paused; cleaning can wait.",
+        )
 
     def toggle_sleep(self) -> None:
         was_sleeping = self.pet.state == PetState.SLEEPING

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0
+
+- Condition-specific ASCII poses with blinking, tail, ear, and particle animation
+- Responsive furnished room with compact and expanded terminal layouts
+- Time-aware window and temporary feed, play, and tidy reactions
+- More personal local-AI voice with explicit activity and mood context
+- Clearer hunger, sleep, loneliness, and messy-room behavior
+- Visible Classic fallback status when an optional AI provider fails
+- One-retry guard for repeated or self-contradicting local-model replies
+- Future 2.0 Docker neighborhood concept documented in the README
+
 ## 1.0.0
 
 - Cozy responsive curses interface with animated ASCII pet

@@ -83,6 +83,21 @@ If the model or runtime is missing, cannot start, or cannot generate a reply,
 the pet automatically answers with its Classic voice instead. Quitting the game
 also shuts down the local model server.
 
+#### A note about the tiny model
+
+SmolLM2-360M keeps the bundled download and CPU requirements modest, but it is
+genuinely tiny. Its replies can occasionally be overly literal, repetitive,
+self-contradicting, or confused about a conversational detail. The game supplies
+short scene and mood cues, limits response length, and retries once when it
+detects an obvious repeated or contradictory answer. It deliberately does not
+rewrite every unusual response: some harmless oddness is part of Little Guy's
+local-AI personality.
+
+Local replies are sampled rather than scripted, so asking the same question can
+produce different results. Choose Classic mode for fully predictable dialogue,
+or configure a more capable API model when stronger instruction-following is
+more important than completely offline play.
+
 ### OpenAI API
 
 Set the key in the environment, then select option 3 during setup:
@@ -158,7 +173,7 @@ bash ./scripts/build_release.sh
 ```
 
 These produce `dist/virt-pet-windows-x64.zip` and
-`dist/virt-pet-linux-x64.tar.gz`, respectively. A tag such as `v1.0.0` runs
+`dist/virt-pet-linux-x64.tar.gz`, respectively. A tag such as `v1.1.0` runs
 tests, assembles and smoke-tests both local-AI editions, and publishes both
 archives to one GitHub release automatically.
 
@@ -174,3 +189,22 @@ archives to one GitHub release automatically.
 ## License
 
 The game is MIT licensed. Bundled llama.cpp and SmolLM2 licenses are included in full release archives.
+
+## Looking toward 2.0: Little Guy Neighborhood
+
+A future experiment could let otherwise local pets visit a small shared
+neighborhood. The idea is intentionally optional: the virtual pet would remain
+fully playable offline, while an extra network feature could add visits, waves,
+guestbook messages, and a tiny webpage full of ASCII homes.
+
+It would also be a playful way to learn Docker through a real multi-service
+project:
+
+- a Python/FastAPI neighborhood service;
+- PostgreSQL for pets, visits, and messages;
+- a small web dashboard;
+- Docker Compose for local setup, networking, health checks, and persistent
+  volumes.
+
+This is a direction for exploration rather than a promise for the current 1.x
+roadmap. First, Little Guy gets to enjoy a polished tiny home of their own.
