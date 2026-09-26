@@ -59,6 +59,15 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(messages[0].speaker, "you")
         self.assertEqual(messages[1].speaker, "Pip")
 
+    def test_voice_status_reveals_a_classic_fallback(self):
+        self.engine.voice_name = "local AI"
+        self.engine.voice.last_error = "Local model port is already in use"
+
+        self.assertEqual(
+            self.engine.voice_status,
+            "local AI -> classic fallback",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

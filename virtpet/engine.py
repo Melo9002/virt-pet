@@ -84,7 +84,16 @@ class GameEngine:
         self.conversation.append(ChatMessage("you", message))
         response = self.voice.reply(self.pet, message, history)
         self.conversation.append(ChatMessage(self.pet.name, response))
+        if getattr(self.voice, "last_error", None):
+            self.log(f"{self.voice_name} unavailable; Classic voice answered.")
         return response
+
+    @property
+    def voice_status(self) -> str:
+        """Describe the configured voice and any active fallback honestly."""
+        if getattr(self.voice, "last_error", None):
+            return f"{self.voice_name} -> classic fallback"
+        return self.voice_name
 
     def stop(self) -> None:
         self.running = False

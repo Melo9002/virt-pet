@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from virtpet.pet import Pet
+from virtpet.pet import Pet, PetState
 from virtpet.voice import (
     ChatMessage,
     FallbackVoice,
@@ -12,6 +12,7 @@ from virtpet.voice import (
     OpenAIVoice,
     ResilientVoice,
     _bounded_reply,
+    _instructions,
     _local_messages,
 )
 
@@ -106,6 +107,27 @@ class FallbackVoiceTests(unittest.TestCase):
             ["system", "user", "assistant", "user"],
         )
         self.assertEqual(messages[-1]["content"], "Can you hear me?")
+
+    def test_sleeping_pet_gets_an_explicit_drowsy_scene(self):
+        instructions = _instructions(
+            Pet("Little Guy", state=PetState.SLEEPING, tiredness=40)
+        )
+
+        self.assertIn("Scene: asleep; mood: sleepy", instructions)
+        self.assertIn("mumbling from a dream", instructions)
+        self.assertIn("soft half-asleep reply", instructions)
+
+    def test_persona_stays_inside_the_tiny_world(self):
+        instructions = _instructions(Pet("Jojo"))
+
+        self.assertIn("cozy terminal home", instructions)
+        self.assertIn("affectionate, impish", instructions)
+        self.assertIn("not Jojo", instructions)
+        self.assertIn("answer about yourself with 'I'", instructions)
+        self.assertIn("never address the user as Jojo", instructions)
+        self.assertIn("Mmm, that's me", instructions)
+        self.assertIn("Never say AI", instructions)
+        self.assertNotIn("virtual pet speaking to a human player", instructions)
 
     def test_ai_reply_is_limited_to_one_short_sentence(self):
         reply = _bounded_reply(

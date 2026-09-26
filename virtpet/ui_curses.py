@@ -2,7 +2,7 @@ import curses
 import textwrap
 
 from virtpet.engine import GameEngine
-from virtpet.pet import PetState
+from virtpet.sprites import pet_art
 
 
 def _conversation_lines(messages, width: int = 56,
@@ -155,7 +155,7 @@ class CursesUI:
             status += f"  DEBUG x{self.engine.minutes_per_real_second:g}"
         self._put(screen, 2, left + 3, f"{self.engine.get_local_time()}  {status}", curses.A_BOLD)
         self._put(screen, 2, left + 42, f"age {self.pet.age // 60}h {self.pet.age % 60:02}m")
-        self._put(screen, 3, left + 3, f"voice: {self.engine.voice_name}", curses.A_DIM)
+        self._put(screen, 3, left + 3, f"voice: {self.engine.voice_status}", curses.A_DIM)
         self._draw_pet(screen, left)
 
         self._put(screen, 4, left + 35, "CARE", curses.A_BOLD | self._color(5))
@@ -195,13 +195,10 @@ class CursesUI:
         screen.refresh()
 
     def _draw_pet(self, screen, left: int) -> None:
-        x = left + 7 + ((self._frame // 5) % 2 if not self.pet.paused else 0)
-        if self.pet.state == PetState.SLEEPING:
-            art = ["   z  Z", "  /\\_/\\", " ( -.- )", "  > ^ <"]
-        else:
-            eyes = "^.^" if self.pet.happiness >= 50 else "o.o"
-            art = ["  /\\_/\\", f" ( {eyes} )", "  > ^ <", "  /   \\"]
-        if self.pet.paused:
-            art.append("  [pause]")
+        x = left + 7
+        art = pet_art(self.pet.condition, self.pet.state, self._frame,
+                      paused=self.pet.paused)
         for row, line in enumerate(art):
             self._put(screen, 6 + row, x, line, curses.A_BOLD | self._color(3))
+        if self.pet.paused:
+            self._put(screen, 11, x + 2, "[pause]", curses.A_DIM)
