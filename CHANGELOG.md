@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0
+## 1.0.0
 
 - Cozy responsive curses interface with animated ASCII pet
 - Real-time hunger, happiness, mess, tiredness, sleep, and six conditions
@@ -8,5 +8,7 @@
 - In-terminal chat with deterministic Classic voice
 - Optional bundled SmolLM2 local voice through llama.cpp
 - Optional OpenAI Responses API voice with secure key handling
+- Short, identity-aware replies with wrapped conversation text
+- Voice diagnostics and reliable local-server cleanup
 - Accelerated debug mode and cross-platform automated tests
-- Portable Windows release automation
+- Portable Windows and Linux release automation
